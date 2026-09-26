@@ -12,6 +12,7 @@
     "./voice": "./lib/voice.mjs",
     "./voices-defaults": "./shared/voices-defaults.mjs",
     "./web": "./lib/web.mjs",
+    "./ytsearch": "./lib/ytsearch.mjs",
     "./documents": "./lib/documents.mjs",
     "./updater": "./lib/updater.mjs",
     "./bus": "./lib/bus.mjs",

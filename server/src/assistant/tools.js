@@ -26,7 +26,7 @@ export const DEFS = {
   find_resources: { description: 'Free videos, articles, docs and discussions about the current lesson (or a topic), from YouTube, Crash Course, Khan Academy, Codecademy, freeCodeCamp, MDN, Wikipedia, Reddit and the course\'s docs. Shows them on screen as cards.', input_schema: obj({ topic: { type: 'string', description: 'optional: a topic instead of the current lesson' } }) },
   play_video: { description: 'Search YouTube and play the best match in the app\'s mini player (music or a video). query: what to play, e.g. "lofi study music" or "cfqueryparam tutorial".', input_schema: obj({ query: { type: 'string' } }, ['query']) },
   look_up: { description: 'Search the web and return the top results (title, link, snippet). Use for facts and current information.', input_schema: obj({ query: { type: 'string' } }, ['query']) },
-  media_control: { description: 'Control the app\'s player: pause, resume, next, previous, stop, louder, quieter.', input_schema: obj({ action: { type: 'string', enum: ['pause', 'resume', 'next', 'previous', 'stop', 'louder', 'quieter'] } }, ['action']) },
+  media_control: { description: 'Control the app\'s player: pause, resume, next, previous, stop, louder, quieter, popout (open the video in their own browser at the same second).', input_schema: obj({ action: { type: 'string', enum: ['pause', 'resume', 'next', 'previous', 'stop', 'louder', 'quieter', 'popout'] } }, ['action']) },
 };
 
 export function definitions(opts) {

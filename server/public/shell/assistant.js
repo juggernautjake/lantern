@@ -442,7 +442,7 @@ function mediaSlot() {
     const ctl = el('div', { class: 'as-mctl' }, [
       b('Previous', '⏮', () => mediaControl('previous'), 'media-prev'), b('Play or pause', '⏯', () => mediaControl('toggle'), 'media-toggle'), b('Next', '⏭', () => mediaControl('next'), 'media-next'),
       seek, time, speed, vol,
-      b('Open in the browser', '↗', () => { const it = A.media.queue[A.media.index]; if (it) window.open('https://www.youtube.com/watch?v=' + it.videoId, '_blank', 'noopener'); }),
+      b('Pop out into your browser', '↗', () => popOut(), 'media-popout'),
       b('Smaller or bigger', '▭', () => box.classList.toggle('big')),
       b('Close the player', '✕', () => mediaControl('stop'), 'media-close'),
     ]);
@@ -461,6 +461,17 @@ function mediaSlot() {
     }, 500);
   });
   return $('.as-media');
+}
+/* Pop the video out into the browser at the second it was on, and pause it here. */
+function popOut() {
+  const it = A.media.queue[A.media.index];
+  if (!it) return;
+  const p = A.media.player;
+  let t = 0;
+  try { if (p && p.getCurrentTime) t = Math.floor(p.getCurrentTime() || 0); if (p && p.pauseVideo) p.pauseVideo(); } catch (e) { /* gone */ }
+  const url = 'https://www.youtube.com/watch?v=' + encodeURIComponent(it.videoId) + (t ? '&t=' + t + 's' : '');
+  A.media.lastPopOut = url;
+  window.open(url, '_blank', 'noopener');
 }
 const fmt = (s) => { s = Math.floor(s || 0); const m = Math.floor(s / 60); return m + ':' + String(s % 60).padStart(2, '0'); };
 function loadYouTubeApi() {
@@ -499,7 +510,11 @@ export async function playQueue(queue, index, kind) {
         try { e.target.playVideo(); } catch (x) { /* autoplay may need a click */ }
       },
       onStateChange: (e) => { if (window.YT && e.data === window.YT.PlayerState.ENDED) mediaControl('next'); },
-      onError: () => { toast('That video cannot be played here. Trying the next one.'); mediaControl('next'); },
+      onError: (e) => {
+        const blocked = e && (e.data === 101 || e.data === 150);
+        toast(blocked ? 'That video can’t play inside Lantern. Press ↗ to pop it out into your browser.' : 'That video cannot be played here. Trying the next one.');
+        if (!blocked) mediaControl('next');
+      },
     },
   });
 }
@@ -520,6 +535,7 @@ export function mediaControl(action) {
     case 'toggle': if (has) { if (p.getPlayerState && window.YT && p.getPlayerState() === window.YT.PlayerState.PLAYING) p.pauseVideo(); else p.playVideo(); } break;
     case 'next': if (A.media.index < A.media.queue.length - 1) { A.media.index++; if (has) p.loadVideoById(A.media.queue[A.media.index].videoId); paintQueue(); } break;
     case 'previous': if (A.media.index > 0) { A.media.index--; if (has) p.loadVideoById(A.media.queue[A.media.index].videoId); paintQueue(); } else if (has) p.seekTo(0, true); break;
+    case 'popout': popOut(); break;
     case 'louder': A.audio.setLevel(A.media.kind, Math.min(100, A.audio.level(A.media.kind) + 15)); break;
     case 'quieter': A.audio.setLevel(A.media.kind, Math.max(0, A.audio.level(A.media.kind) - 15)); break;
     case 'stop': {

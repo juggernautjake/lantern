@@ -26,13 +26,14 @@
    =========================================================================== */
 
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { startFakeHub } from './fake-hub.mjs';
 import { startApp, suite, until, sleep, loadPlaywright, ROOT } from './helpers.mjs';
 
 const t = suite('Lantern end to end: send a course, accept it, study offline, sync');
 const PACK = join(ROOT, 'dist', 'packs', 'cfml.lpack');
+const LANTERN_VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
 if (!existsSync(PACK)) { console.error('Build the pack first: node scripts/build-pack.mjs cfml'); process.exit(2); }
 const pw = await loadPlaywright();
 if (!pw) { console.error('playwright-core is not available.'); process.exit(2); }
@@ -95,7 +96,7 @@ try {
   await O.goto(owner.url + '/#/owner/people');
   await until('the learner appears in People', async () => { await O.reload(); return O.locator('[data-testid=person-row][data-email="sam@example.com"]').count(); });
   const row = O.locator('[data-testid=person-row][data-email="sam@example.com"]');
-  t.ok('People shows the learner with Lantern’s version', /0\.1\.0/.test(await row.innerText()));
+  t.ok('People shows the learner with Lantern’s version', (await row.innerText()).includes(LANTERN_VERSION));
   await row.locator('input[type=checkbox]').check();
   await O.click('[data-testid=send-course]');
   await O.selectOption('[data-testid=send-course-select]', 'cfml');

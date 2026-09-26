@@ -380,7 +380,21 @@ const hubHas = (id) => (settings.get('hub.courses', []) || []).some((c) => c.id 
 
 /* -------------------------------------------------------------- catalog --- */
 
+// The profile (name, role, friend code) can change on the hub, e.g. the owner role granted from the
+// dashboard: fetch it again now and then so the app notices without signing out and in.
+let profileAt = 0;
+async function refreshProfile(force) {
+  if (!force && Date.now() - profileAt < (Number(process.env.LANTERN_PROFILE_REFRESH_MS) || 60_000)) return;   // tests shorten it
+  profileAt = Date.now();
+  const me = await call('lantern_me', {}).catch(() => null);
+  if (!me) return;
+  const was = profile() || {};
+  settings.set('hub.profile', me);
+  if (was.role !== me.role || was.display_name !== me.display_name) bus.emit('profile', { profile: me });
+}
+
 export async function refreshCatalog() {
+  await refreshProfile();
   const [courses, offers] = await Promise.all([call('lantern_my_courses', {}), call('lantern_my_offers', {})]);
   const before = new Set((settings.get('hub.offers', []) || []).map((o) => o.id));
   settings.set('hub.courses', courses || []);

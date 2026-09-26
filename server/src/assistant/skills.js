@@ -34,6 +34,7 @@ export async function handle(text, S, opts) {
 
   // the voice and the player
   if (/^(stop|stop talking|quiet|be quiet|shh+|hush|that's enough|enough|cancel|never ?mind)$/.test(q)) return { reply: '', actions: [{ type: 'stop' }], silent: true };
+  if (/^(pop (it|this|that|the video) out|pop out( the video)?|open (it|this|that|the video) (in|on) (my |the )?browser)$/.test(q)) return { reply: 'Opening it in your browser.', actions: [{ type: 'media', action: 'popout' }] };
   if (/^(pause|pause (the )?(music|video|song|it))$/.test(q)) return { reply: 'Paused.', actions: [{ type: 'media', action: 'pause' }] };
   if (/^(resume|unpause|keep playing|play again|continue playing|resume (the )?(music|video))$/.test(q)) return { reply: 'Playing.', actions: [{ type: 'media', action: 'resume' }] };
   if (/^(next|skip|skip (it|this)|next (song|video|track))$/.test(q)) return { reply: 'Next one.', actions: [{ type: 'media', action: 'next' }] };

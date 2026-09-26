@@ -4,6 +4,7 @@ export { createLLM, fromEnv, PROVIDERS, ANTHROPIC_MODELS, toOpenAI } from "./llm
 export { createVoice, VOICES, OPENAI_VOICES, DESCRIBE, OPENAI_DESCRIBE, TONES, toneAt, speakable } from "./voice.mjs";
 export { CHAINS, pickBrowserVoice, defaultsFor, pickOpenAIVoice } from "../shared/voices-defaults.mjs";
 export { createWeb, readable, safeUrl } from "./web.mjs";
+export { createYtSearch, parse as parseYouTubeResults, spFor as youtubeFilter, resultsUrl as youtubeResultsUrl } from "./ytsearch.mjs";
 export { createDocuments, TYPES as DOCUMENT_TYPES, supported as documentSupported } from "./documents.mjs";
 export { createUpdater, cmp as compareVersions } from "./updater.mjs";
 export { createBus } from "./bus.mjs";

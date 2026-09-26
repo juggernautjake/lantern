@@ -1,5 +1,5 @@
 // Looking things up online, for any AI provider (Claude also has its own web search).
-//   const web = createWeb({ browserPage })      browserPage(name) → a Playwright page, optional (used when plain fetches
+//   const web = createWeb({ browserPage })      browserPage(name) → a HEADLESS Playwright page, optional (used when plain fetches
 //                                                are blocked, and for pages that build themselves with JavaScript)
 //   web.search(query, { max }) → { query, results: [{ title, url, snippet }] }   DuckDuckGo's plain page, then Bing's, then Bing in a browser
 //   web.read(url)              → { url, title, text }    the readable text of a page, capped to fit a conversation

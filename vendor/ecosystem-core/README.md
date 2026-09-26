@@ -13,7 +13,8 @@ has them installed.
 |---|---|
 | `llm.mjs` | The AI "brain": Claude, ChatGPT, Grok or a local Ollama model, in one conversation format. The app passes its config in; nothing reads `.env` here. |
 | `voice.mjs` | Text to speech: ElevenLabs, OpenAI, or the free voices built into the browser. Each app has its own default voice. |
-| `web.mjs` | Web search (DuckDuckGo, then Bing, then Bing in a browser if the app provides one) and readable page text. Takes an optional allow-list, e.g. for learners. |
+| `web.mjs` | Web search (DuckDuckGo, then Bing, then Bing in a browser if the app provides one) and readable page text. Takes an optional allow-list, e.g. for learners. The injected browser page must be HEADLESS: nothing in the background may open a window. |
+| `ytsearch.mjs` | YouTube search with no browser and no API key: reads youtube.com's own results page. Filters: recent, popular, newest, playlists, Shorts. An optional API key uses the Data API first. |
 | `documents.mjs` | Reads Word, PDF, PowerPoint, Excel/CSV, OpenDocument, RTF, text, email and pictures of text. The app's permission check is passed in. |
 | `updater.mjs` | GitHub-release updates. Backs up the data first, swaps the program files, installs new packages only when needed, rolls back if the new version doesn't start, and keeps a history. |
 | `bus.mjs` | Server-Sent Events from an app's server to its own pages, plus an in-process hook. |

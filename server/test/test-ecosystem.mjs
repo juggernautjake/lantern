@@ -51,6 +51,20 @@ try {
   const pub = (status, extra) => owner.api('/api/local/publish', { method: 'POST', headers: tok(owner), body: Object.assign({ file: tpl.file, status }, extra || {}) });
   const O = (fn, args) => owner.api('/api/hub/owner/' + fn, { method: 'POST', body: args || {} });
 
+  /* ------------------------------------------ a role changed on the hub */
+  t.section('A role changed on the hub is noticed');
+  const promoted = await app('promoted', 4489, { env: { LANTERN_PROFILE_REFRESH_MS: '1' } });
+  await connect(promoted);
+  await promoted.api('/api/hub/signup', { method: 'POST', body: { email: 'promoted@example.com', password: 'pw123456', name: 'Pat Promoted' } });
+  const pst = async () => (await promoted.api('/api/platform')).hub;
+  t.ok('a new account starts as a learner', (await pst()).owner === false);
+  const pr = hub.db.profiles.find((p) => p.email === 'promoted@example.com');
+  pr.role = 'owner';                                                   // e.g. granted from the hub dashboard
+  await new Promise((r) => setTimeout(r, 20));
+  await promoted.api('/api/hub/sync', { method: 'POST', body: {} });
+  t.ok('after the next catalog refresh the app knows it is the owner, no sign-out needed', (await pst()).owner === true);
+  pr.role = 'student';
+
   /* --------------------------------------------------- draft / published */
   t.section('Draft and published');
   await pub('draft');

@@ -66,7 +66,8 @@ The 🔊 button in the top bar (and **Settings → Sound**) sets how loud Lanter
 
 Press **Resources** above a lesson (or ask). Lantern searches places that are good for learning, about the lesson you have open:
 
-- **Videos:** YouTube (and Crash Course for general subjects). **Play here** plays one in the mini player; **Open in browser** opens it in a tab.
+- **Videos:** YouTube (and Crash Course for general subjects). **Play here** plays one in the mini player; **Open in browser** opens it in a tab. On the mini player, **↗** (or saying "pop it out") pauses the video and opens it in your browser at the same second.
+- **No YouTube key needed.** Lantern reads YouTube's own search results directly; nothing opens on screen while it looks. A `YOUTUBE_API_KEY` is optional.
 - **Reading and discussion:** freeCodeCamp, Codecademy, MDN, Khan Academy, Wikipedia, the course's reference docs and blogs, and the course's subreddits.
 - **Reference (works offline too):** for the ColdFusion course, the reference page for every tag the lesson uses, and the course's reading list.
 

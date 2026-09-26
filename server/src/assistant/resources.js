@@ -24,6 +24,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { dataDir } from '../platform/config.js';
 import { createWeb } from '../../../vendor/ecosystem-core/lib/web.mjs';
+import { createYtSearch } from '../../../vendor/ecosystem-core/lib/ytsearch.mjs';
 
 /* --------------------------------------------------------- the allow-list --- */
 
@@ -152,10 +153,20 @@ export const web = () => webImpl || learnWeb || (learnWeb = testSearch((u) => al
 /* for "look up …": the whole web */
 export const generalWeb = () => webImpl || anyWeb || (anyWeb = testSearch(null) || createWeb({ fetch: (...a) => doFetch(...a) }));
 
-/* YouTube: the Data API when a key is set (better results), otherwise a web
-   search limited to youtube.com. */
+/* YouTube: the Data API when a key is set, otherwise youtube.com's own results
+   page read directly (no browser, no key), and a web search limited to
+   youtube.com if YouTube sends a check page instead. Nothing opens on screen. */
+let yt = null;
 export async function youtube(query, max) {
   const n = max || 6;
+  if ((fetchImpl || (!webImpl && !process.env.LANTERN_TEST_SEARCH)) && !process.env.YOUTUBE_API_KEY) {   // tests with their own web search skip this unless they also give a fetch
+    yt = yt || createYtSearch({ fetch: (...a) => doFetch(...a) });
+    try {
+      const found = await yt.search(query, { max: n * 2 });
+      const vids = found.filter((v) => v.videoId && !v.live).slice(0, n).map((v) => videoCard({ id: v.videoId, title: v.title, channel: v.channel }));
+      if (vids.length) return vids;
+    } catch (e) { /* a check page: fall back to the web search below */ }
+  }
   const key = process.env.YOUTUBE_API_KEY;
   if (key) {
     const u = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&safeSearch=strict&maxResults=' + n + '&q=' + encodeURIComponent(query) + '&key=' + encodeURIComponent(key);

@@ -1,5 +1,12 @@
 # What's new
 
+## 0.1.1
+
+- **Videos pop out.** The ↗ button on the mini player (or "pop it out") pauses the video and opens it in your browser at the same second.
+- **Better video search, no key needed.** Lantern now reads YouTube's own search results directly, so "find me a video about this" gets real YouTube results without an API key, and nothing opens on screen while it looks.
+- A video that can't play inside other apps now says so and offers ↗ instead of skipping ahead.
+- Lantern notices when your role changes on the hub (for example, becoming the owner) without signing out and back in.
+
 ## 0.1.0
 
 The first version of Lantern as an app.
