@@ -1,0 +1,22 @@
+/* server/public/shell/friends.css — the Friends page (friends.js). Uses the
+   shared tokens only, so the Lantern brand, day theme and high contrast apply. */
+.bar nav .badge { display: inline-block; min-width: 1.4em; padding: 0 5px; margin-left: 4px; border-radius: 999px;
+  background: var(--accent); color: var(--on-accent); font-size: var(--step--1); line-height: 1.4em; text-align: center; font-weight: 600; }
+.bar nav .badge[hidden] { display: none; }
+.fr-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); align-items: start; }
+.fr-grid .card h2 { margin-top: 0; font-size: var(--step-1); }
+.fr-codetext { font-family: var(--font-mono, ui-monospace, monospace); font-size: 1.6rem; letter-spacing: .08em; color: var(--accent); font-weight: 600; }
+.fr-check { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.fr-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--line); }
+.fr-row:first-of-type { border-top: 0; }
+.fr-row > div:first-child { min-width: 0; flex: 1 1 200px; overflow-wrap: anywhere; }
+.fr-results { margin-top: 10px; }
+.card input[type=text] { flex: 1 1 220px; min-width: 0; }
+.card > input[type=text] { width: 100%; margin-top: 8px; box-sizing: border-box; }
+.fr-note { margin: 6px 0 0; padding-left: 10px; border-left: 3px solid var(--accent); color: var(--ink-2); font-style: italic; overflow-wrap: anywhere; }
+.fr-requests { border: 2px solid var(--accent); background: var(--accent-soft); }
+.fr-ignored { margin-top: 10px; }
+.fr-ignored summary { cursor: pointer; color: var(--ink-2); }
+.fr-empty ol { margin: 6px 0 0; padding-left: 1.3em; color: var(--ink-2); }
+.fr-dialog { max-width: min(92vw, 520px); }
+.fr-dialog textarea, .fr-dialog select { width: 100%; box-sizing: border-box; }

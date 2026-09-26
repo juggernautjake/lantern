@@ -1,0 +1,24 @@
+[
+  {
+    "id": "u1", "n": 1, "title": "Getting started",
+    "overview": "What this course is and how it works.",
+    "lessons": [
+      { "id": "t-u1l1", "title": "Welcome", "minutes": 5, "objectives": ["Find your way around a lesson"], "keyTerms": ["lesson", "exercise"], "exercises": [] },
+      { "id": "t-u1l2", "title": "Your first exercise", "minutes": 10, "objectives": ["Answer a question and see it checked"], "keyTerms": ["answer"],
+        "exercises": [{ "id": "t-u1l2e1", "title": "What is 6 × 7?" }] }
+    ],
+    "check": { "id": "t-u1check", "title": "Unit 1 check", "minutes": 5 },
+    "projects": []
+  },
+  {
+    "id": "u2", "n": 2, "title": "Going further",
+    "overview": "A small project in two steps.",
+    "lessons": [
+      { "id": "t-u2l1", "title": "Planning a project", "minutes": 10, "objectives": ["Break a task into steps"], "keyTerms": ["milestone"], "exercises": [] }
+    ],
+    "check": null,
+    "projects": [
+      { "id": "t-proj", "title": "A tiny project", "minutes": 20, "milestones": [{ "id": "t-proj-m1", "title": "Step one" }, { "id": "t-proj-m2", "title": "Step two" }] }
+    ]
+  }
+]

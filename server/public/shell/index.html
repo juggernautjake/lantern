@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" data-brand="lantern">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lantern</title>
+<link rel="icon" href="/shell/lantern.svg" type="image/svg+xml">
+<!-- The shared ecosystem look (ecosystem-core, vendored): colours, type, shapes. -->
+<link rel="stylesheet" href="/app/theme/fonts.css">
+<link rel="stylesheet" href="/eco/client/tokens.css">
+<link rel="stylesheet" href="/shell/shell.css">
+<link rel="stylesheet" href="/shell/assistant.css">
+<link rel="stylesheet" href="/shell/friends.css">
+</head>
+<body>
+<a class="sr" href="#main">Skip to content</a>
+<div id="banner-slot"></div>
+<header class="bar">
+  <a class="brand" href="#/"><span class="flame" aria-hidden="true"></span> Lantern</a>
+  <nav aria-label="Main">
+    <a href="#/" data-nav="home">Courses</a>
+    <a href="#/friends" data-nav="friends" id="nav-friends">Friends <span class="badge" id="friends-badge" data-testid="friends-badge" hidden></span></a>
+    <a href="#/whats-new" data-nav="whats-new">What’s new</a>
+    <a href="#/owner" data-nav="owner" id="nav-owner" hidden>Owner</a>
+    <a href="#/settings" data-nav="settings">Settings</a>
+  </nav>
+  <span class="grow"></span>
+  <span class="pill" id="eco-pill" hidden title="Dayspring is running on this computer"><span class="dot on"></span> Dayspring</span>
+  <button class="pill icon-btn" id="sound-btn" type="button" title="Sound: voice, music and video volume" aria-label="Sound">🔊</button>
+  <button class="pill icon-btn" id="assistant-btn" type="button" title="Show or hide Lantern, your study companion" aria-label="Assistant" aria-pressed="true"><span class="mini-flame" aria-hidden="true"></span> <span class="lbl">Lantern</span></button>
+  <span class="pill" id="sync-pill" data-testid="sync-pill"><span class="dot"></span> <span class="txt">Offline</span></span>
+</header>
+<div class="layout">
+  <main id="main" tabindex="-1"></main>
+  <aside id="assistant-slot" hidden aria-label="Assistant"></aside>
+</div>
+<div id="media-slot"></div>
+<div id="toasts" role="status" aria-live="polite"></div>
+<script src="/shell/shell.js"></script>
+<script src="/shell/friends.js"></script>
+<!-- The assistant (the lantern), its voice, the sound panel and the mini player. -->
+<script type="module" src="/shell/assistant.js"></script>
+</body>
+</html>

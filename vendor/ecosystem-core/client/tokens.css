@@ -1,0 +1,171 @@
+/* ecosystem-core/client/tokens.css
+   ONE shared system, TWO brands. Dayspring and Lantern share the base (spacing, radii, motion, type scale, glass,
+   focus, component shapes) so they feel like one family; each brand has its own colours, display face and
+   signature so they're never mistaken for each other.
+
+     <html data-brand="dayspring">            dawn and sky: night indigo → sunrise, the living sky, the round orb
+     <html data-brand="lantern">              lamplight and study: walnut, amber, brass, parchment ink, the lantern
+     <html data-brand="lantern" data-theme="day">   Lantern's daytime study theme (parchment page, walnut ink)
+   Modifiers on any brand:   data-contrast="high"   ·   data-motion="reduced" (also follows the system setting)
+   A brand can be set on any element, not just <html> (the demo shows both side by side).
+
+   Fonts: body = Outfit (both apps). Lantern's display face = Fraunces. Both are OFL; load them from Google Fonts or
+   bundle them (Lantern bundles them in its course packs so everything works offline). The stacks fall back to system
+   fonts that look close.
+   Measured contrast for every text/background pair: docs/BRAND.md (regenerate with `npm run contrast`). */
+
+/* ------------------------------------------------------------------ the shared base */
+:root, [data-brand] {
+  --font-body: "Outfit", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-body);
+  --font-mono: "Cascadia Code", "JetBrains Mono", "Fira Code", Consolas, ui-monospace, monospace;
+
+  /* type scale (steps are shared; the brand picks weights and the display face) */
+  --fs-xs: .78rem; --fs-sm: .9rem; --fs-md: 1rem; --fs-lg: 1.22rem; --fs-xl: 1.55rem; --fs-2xl: 2.1rem; --fs-3xl: 3rem;
+  --lh-tight: 1.2; --lh: 1.5; --lh-loose: 1.7;
+
+  /* spacing, radii */
+  --sp-1: .25rem; --sp-2: .5rem; --sp-3: .75rem; --sp-4: 1rem; --sp-5: 1.5rem; --sp-6: 2rem; --sp-7: 3rem; --sp-8: 4rem;
+  --r-sm: .6em; --r: .9em; --r-lg: 1.25em; --r-pill: 2em;
+
+  /* motion */
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --dur-1: 120ms; --dur-2: 220ms; --dur-3: 420ms; --dur-4: 900ms;
+
+  /* glass and elevation (the recipe is shared; the tint comes from the brand) */
+  --blur: 16px;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / .25), 0 4px 14px rgb(0 0 0 / .18);
+  --shadow-2: 0 10px 40px rgb(0 0 0 / .35);
+
+  /* focus ring: same shape everywhere, brand colour */
+  --focus-w: 3px; --focus-off: 2px;
+
+  /* icons: line icons, same stroke */
+  --icon-stroke: 1.75; --icon-size: 1.25em;
+
+  /* the two brands' chip colours, usable in either app (for content that came from the other one) */
+  --brand-dayspring: #7c8cff; --brand-dayspring-2: #ffb3c1;
+  --brand-lantern: #ffb547; --brand-lantern-2: #c9a45c;
+}
+
+/* ------------------------------------------------------------------ brand: Dayspring (dawn and sky) */
+:root, [data-brand="dayspring"] {
+  --bg: #060812; --bg-2: #0b1026;
+  --surface: #121634; --surface-2: #1a1f45;
+  --glass: rgb(20 24 50 / .42); --glass-strong: rgb(16 20 44 / .92);
+  --edge: rgb(165 175 255 / .14); --edge-2: rgb(170 180 255 / .28);
+  --ink: #eef0ff; --muted: #a4abcc; --dim: #8a91b8;
+  --accent: #7c8cff; --accent-2: #a78bfa; --accent-3: #6ea8fe; --accent-ink: #0a0d24;
+  --sunrise-rose: #ff8fa3; --sunrise-gold: #ffd27a; --sky: #67e8f9;
+  --ok: #7ee3b0; --warn: #ffd27a; --danger: #ff8fa3; --link: #9db8ff; --focus: #67e8f9;
+  --glow: rgb(124 140 255 / .35);
+  --font-wordmark: var(--font-body); --wordmark-weight: 250; --wordmark-tracking: .22em; --wordmark-case: uppercase;
+  --heading-weight: 500;
+  color-scheme: dark;
+}
+
+/* ------------------------------------------------------------------ brand: Lantern (lamplight and study) */
+[data-brand="lantern"] {
+  --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  --bg: #120d09; --bg-2: #1a130d;
+  --surface: #231a12; --surface-2: #2e2218;
+  --glass: rgb(40 28 18 / .5); --glass-strong: rgb(30 21 14 / .94);
+  --edge: rgb(255 214 160 / .14); --edge-2: rgb(255 214 160 / .28);
+  --ink: #f6ead2; --muted: #d2bf9c; --dim: #a8936f;
+  --accent: #ffb547; --accent-2: #ff8a3d; --accent-3: #c9a45c; --accent-ink: #1c1206;
+  --brass: #c9a45c; --ember: #ff8a3d; --parchment: #f6ead2;
+  --ok: #86d9b0; --warn: #ffcf6b; --danger: #ff9b85; --link: #8fd8cb; --focus: #8fd8cb;
+  --glow: rgb(255 181 71 / .32);
+  --font-wordmark: var(--font-display); --wordmark-weight: 600; --wordmark-tracking: .02em; --wordmark-case: none;
+  --heading-weight: 600;
+  color-scheme: dark;
+}
+/* Lantern's daytime study theme: a parchment page and walnut ink */
+[data-brand="lantern"][data-theme="day"] {
+  --bg: #f7efdd; --bg-2: #efe3c8;
+  --surface: #fffaf0; --surface-2: #f3e8d2;
+  --glass: rgb(255 250 240 / .7); --glass-strong: rgb(255 250 240 / .96);
+  --edge: rgb(90 60 30 / .16); --edge-2: rgb(90 60 30 / .3);
+  --ink: #2b1d12; --muted: #5a4633; --dim: #6d5840;
+  --accent: #9a4a0c; --accent-2: #b3401a; --accent-3: #7a5a1c; --accent-ink: #fffaf0;
+  --brass: #7a5a1c; --ember: #b3401a;
+  --ok: #276b4d; --warn: #7a5200; --danger: #a8261b; --link: #1c655c; --focus: #1c655c;
+  --glow: rgb(255 181 71 / .28);
+  color-scheme: light;
+}
+
+/* ------------------------------------------------------------------ high contrast (any brand) */
+[data-contrast="high"], [data-brand][data-contrast="high"] {
+  --edge: rgb(255 255 255 / .5); --edge-2: rgb(255 255 255 / .8);
+  --muted: var(--ink); --dim: var(--ink);
+  --glass: var(--surface); --blur: 0px;
+}
+:root[data-contrast="high"], [data-brand="dayspring"][data-contrast="high"] { --bg: #000; --bg-2: #000; --surface: #0a0a1a; --ink: #fff; --accent: #aab4ff; --link: #c4d3ff; --focus: #7ff3ff; }
+[data-brand="lantern"][data-contrast="high"] { --bg: #000; --bg-2: #000; --surface: #140e08; --ink: #fff8ea; --accent: #ffc56b; --link: #a8f0e3; --focus: #a8f0e3; }
+[data-brand="lantern"][data-theme="day"][data-contrast="high"] { --bg: #fffdf6; --bg-2: #fffdf6; --surface: #fff; --ink: #000; --accent: #6e3406; --link: #0b4a43; --focus: #0b4a43; --edge: rgb(0 0 0 / .55); --edge-2: rgb(0 0 0 / .85); }
+
+/* ------------------------------------------------------------------ reduced motion (any brand) */
+[data-motion="reduced"] { --dur-1: 1ms; --dur-2: 1ms; --dur-3: 1ms; --dur-4: 1ms; }
+@media (prefers-reduced-motion: reduce) { :root:not([data-motion="full"]) { --dur-1: 1ms; --dur-2: 1ms; --dur-3: 1ms; --dur-4: 1ms; } }
+[data-motion="reduced"] *, [data-motion="reduced"] *::before, [data-motion="reduced"] *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+
+/* ------------------------------------------------------------------ base elements */
+[data-brand], :root { font-family: var(--font-body); color: var(--ink); background: var(--bg); line-height: var(--lh); }
+.eco-h, [data-brand] h1, [data-brand] h2, [data-brand] h3 { font-family: var(--font-display); font-weight: var(--heading-weight); line-height: var(--lh-tight); }
+[data-brand] a, .eco-link { color: var(--link); text-underline-offset: .18em; }
+:where([data-brand]) :focus-visible { outline: var(--focus-w) solid var(--focus); outline-offset: var(--focus-off); border-radius: var(--r-sm); }
+.eco-icon { width: var(--icon-size); height: var(--icon-size); stroke: currentColor; stroke-width: var(--icon-stroke); fill: none; stroke-linecap: round; stroke-linejoin: round; vertical-align: -.2em; }
+.eco-sr { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ------------------------------------------------------------------ components (shared shapes) */
+.eco-btn { font: inherit; font-size: var(--fs-sm); color: var(--ink); background: var(--surface-2); border: 1px solid var(--edge-2); border-radius: var(--r-pill);
+  padding: .55em 1.1em; cursor: pointer; transition: background var(--dur-2) var(--ease), transform var(--dur-1) var(--ease), border-color var(--dur-2) var(--ease); }
+.eco-btn:hover { border-color: var(--accent); }
+.eco-btn:active { transform: translateY(1px); }
+.eco-btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+.eco-btn.ghost { background: transparent; }
+.eco-btn.danger { background: transparent; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+.eco-btn[disabled] { opacity: .5; cursor: not-allowed; }
+.eco-pill { display: inline-flex; align-items: center; gap: .4em; font-size: var(--fs-xs); padding: .25em .75em; border-radius: var(--r-pill); background: var(--surface-2); border: 1px solid var(--edge); color: var(--muted); }
+.eco-card { background: var(--glass); backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur)); border: 1px solid var(--edge); border-radius: var(--r-lg); padding: var(--sp-5); box-shadow: var(--shadow-1); }
+.eco-card.solid { background: var(--surface); }
+.eco-glass { background: var(--glass); backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur)); border: 1px solid var(--edge); }
+.eco-toast { display: flex; gap: var(--sp-3); align-items: flex-start; background: var(--glass-strong); border: 1px solid var(--edge-2); border-radius: var(--r); padding: var(--sp-3) var(--sp-4); box-shadow: var(--shadow-2); color: var(--ink); max-width: 28rem; }
+.eco-toast .t { font-weight: 600; } .eco-toast .s { color: var(--muted); font-size: var(--fs-sm); }
+.eco-dialog { background: var(--glass-strong); border: 1px solid var(--edge-2); border-radius: var(--r-lg); box-shadow: var(--shadow-2); padding: var(--sp-6); color: var(--ink); max-width: 36rem; }
+.eco-dialog h2 { margin: 0 0 var(--sp-3); font-size: var(--fs-xl); }
+.eco-dialog .actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-5); }
+/* the shared "What's new" dialog (updates in either app) */
+.eco-whatsnew .ver { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--muted); }
+.eco-whatsnew .notes { max-height: 16rem; overflow: auto; background: var(--surface); border: 1px solid var(--edge); border-radius: var(--r); padding: var(--sp-4); line-height: var(--lh-loose); }
+.eco-whatsnew .when { display: grid; gap: var(--sp-2); margin-top: var(--sp-4); }
+.eco-whatsnew .when label { display: flex; gap: var(--sp-2); align-items: center; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--edge); border-radius: var(--r); cursor: pointer; }
+.eco-whatsnew .when label:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* content that came from the OTHER app keeps a small mark of where it's from */
+.eco-chip { display: inline-flex; align-items: center; gap: .35em; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .02em; padding: .15em .6em; border-radius: var(--r-pill);
+  color: var(--ink); background: color-mix(in srgb, var(--chip, var(--accent)) 18%, transparent); border: 1px solid color-mix(in srgb, var(--chip, var(--accent)) 60%, transparent); }
+.eco-chip::before { content: ""; width: .55em; height: .55em; border-radius: 50%; background: var(--chip, var(--accent)); box-shadow: 0 0 .5em var(--chip, var(--accent)); }
+.eco-chip[data-app="dayspring"] { --chip: var(--brand-dayspring); }
+.eco-chip[data-app="lantern"] { --chip: var(--brand-lantern); }
+[data-origin] { position: relative; }
+[data-origin]::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; border-radius: 4px 0 0 4px; background: var(--origin, var(--accent)); }
+[data-origin="dayspring"] { --origin: linear-gradient(var(--brand-dayspring), var(--brand-dayspring-2)); }
+[data-origin="lantern"] { --origin: linear-gradient(var(--brand-lantern), var(--ember, #ff8a3d)); }
+/* the "connected" badge (the two apps can see each other) */
+.eco-connected { display: inline-flex; align-items: center; gap: .45em; font-size: var(--fs-xs); color: var(--muted); }
+.eco-connected i { width: .6em; height: .6em; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); }
+.eco-connected.off i { background: var(--dim); box-shadow: none; }
+
+/* wordmarks */
+.eco-wordmark { font-family: var(--font-wordmark); font-weight: var(--wordmark-weight); letter-spacing: var(--wordmark-tracking); text-transform: var(--wordmark-case); color: var(--ink); }
+
+/* ------------------------------------------------------------------ brand signatures */
+/* Dayspring: a gradient horizon line */
+.ds-horizon { height: 2px; border: 0; background: linear-gradient(90deg, transparent, var(--accent-3) 18%, var(--accent) 40%, var(--sunrise-rose, #ff8fa3) 62%, var(--sunrise-gold, #ffd27a) 80%, transparent); opacity: .85; }
+/* Lantern: a soft lamp glow behind the key content, and an optional paper grain */
+.ln-lampglow { position: relative; isolation: isolate; }
+.ln-lampglow::before { content: ""; position: absolute; inset: -20% -10%; z-index: -1; pointer-events: none;
+  background: radial-gradient(closest-side, var(--glow), transparent 70%); filter: blur(8px); }
+.ln-grain { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .35 0 0 0 0 .2 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }

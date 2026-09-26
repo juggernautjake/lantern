@@ -1,0 +1,97 @@
+/* ===========================================================================
+   server/public/shell/assistant.css — Lantern the companion: the docked
+   panel, the lantern, the conversation, resources and the mini player.
+   Only the shared tokens (tokens.css) and the shell's names are used.
+   =========================================================================== */
+
+:root { --as-lamp: 150px; --as-w: 360px; }
+
+/* TV edges (Settings → Display): the whole app sits inside them */
+body { padding: var(--st, 0) var(--sr, 0) var(--sb, 0) var(--sl, 0); }
+
+/* the bar buttons */
+.icon-btn { cursor: pointer; font: inherit; }
+.icon-btn:hover { border-color: var(--accent); }
+.icon-btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); }
+.mini-flame { width: 10px; height: 14px; border-radius: 50% 50% 45% 45% / 60% 60% 40% 40%; background: radial-gradient(circle at 50% 70%, #fff3c4, var(--accent) 60%, transparent 75%); box-shadow: 0 0 8px var(--glow); display: inline-block; }
+
+/* --------------------------------------------------------------- dock --- */
+#assistant-slot.as-slot { width: var(--as-w); flex: none; position: sticky; top: var(--shell-bar); height: calc(100dvh - var(--shell-bar)); border-left: 1px solid var(--line); background: var(--surface); display: flex; }
+body[data-dock="left"] #assistant-slot.as-slot { order: -1; border-left: 0; border-right: 1px solid var(--line); }
+body[data-dock="bottom"] .layout { flex-direction: column; }
+body[data-dock="bottom"] #assistant-slot.as-slot { width: 100%; height: 38vh; position: sticky; bottom: 0; top: auto; border-left: 0; border-top: 1px solid var(--line); order: 2; }
+body[data-dock="bottom"] .as-panel { flex-direction: row; flex-wrap: wrap; }
+body[data-dock="bottom"] .as-head { width: 220px; flex-direction: column; }
+@media (max-width: 900px) {
+  #assistant-slot.as-slot { position: fixed; inset: var(--shell-bar) 0 0 auto; width: min(var(--as-w), 100vw); z-index: 30; box-shadow: var(--shadow-2); }
+  body[data-dock="bottom"] #assistant-slot.as-slot { inset: auto 0 0 0; width: 100vw; height: 50vh; }
+}
+
+.as-panel { display: flex; flex-direction: column; width: 100%; min-height: 0; }
+/* the lamp glow stays inside the panel (it used to widen the page by 36px) */
+.as-head { position: relative; overflow: hidden; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+#assistant-slot.as-slot { overflow: hidden; }
+.as-lamp { width: calc(var(--as-lamp) * .62); height: var(--as-lamp); flex: none; }
+.as-title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.as-title b { font-family: var(--font-display); font-size: var(--step-1); }
+.as-status { color: var(--muted); font-size: var(--fs-xs); min-height: 1.2em; }
+.as-tools { display: flex; gap: 4px; align-self: flex-start; }
+.as-ico { min-width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; font: inherit; line-height: 1; }
+.as-ico:hover { border-color: var(--accent); }
+
+.as-tabs { display: flex; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.as-tabs button { flex: 1; font: inherit; color: var(--ink-2); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.as-tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--ink); border-color: var(--line); }
+
+.as-log { flex: 1; overflow-y: auto; overscroll-behavior: contain; scroll-padding-top: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.as-msg { flex: none; max-width: 92%; padding: 8px 12px; border-radius: var(--radius); line-height: 1.45; overflow-wrap: anywhere; }
+.as-msg p { margin: .2em 0; }
+.as-msg pre, .as-msg code { font-family: var(--font-code); font-size: .92em; }
+.as-msg pre { white-space: pre-wrap; background: var(--bg); padding: 8px; border-radius: var(--radius-s); }
+.as-msg.me { align-self: flex-end; background: var(--accent-soft); border: 1px solid var(--line); }
+.as-msg.lantern { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.as-msg.lantern .eco-chip { margin-bottom: 4px; }
+.as-links { margin: 6px 0 0; padding-left: 18px; }
+.as-links li { margin: 3px 0; }
+
+.as-input { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); align-items: flex-end; }
+.as-input textarea { flex: 1; min-height: 44px; max-height: 140px; resize: vertical; }
+
+/* ---------------------------------------------------------- resources --- */
+.as-res { flex: 1; overflow-y: auto; padding: 12px; min-height: 0; }
+.as-res h3 { margin: 10px 0 6px; font-size: var(--step-1); }
+.as-res h4 { margin: 14px 0 6px; font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.as-res-search { display: flex; gap: 6px; }
+.as-cards { display: grid; gap: 10px; }
+.as-card { display: grid; grid-template-columns: 112px 1fr; gap: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; }
+.as-cards.list .as-card { grid-template-columns: 34px 1fr; }
+.as-card img { width: 112px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-s); background: var(--surface-2); }
+.as-card-type { font-size: 20px; text-align: center; padding-top: 4px; }
+.as-card-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.as-card-body b { font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.as-card-body small { color: var(--muted); }
+.as-card .btn { min-height: 30px; padding: 4px 10px; font-size: var(--fs-sm); }
+
+/* -------------------------------------------------------- mini player --- */
+#media-slot { left: calc(16px + var(--sl, 0px)); bottom: calc(16px + var(--sb, 0px)); }
+.as-media { width: min(380px, calc(100vw - 32px)); border-radius: var(--radius-l); overflow: hidden; background: var(--glass-strong); box-shadow: var(--shadow-2); border: 1px solid var(--line); }
+.as-media.big { width: min(760px, calc(100vw - 32px)); }
+.as-video { aspect-ratio: 16 / 9; background: #000; }
+.as-video > * { width: 100%; height: 100%; display: block; border: 0; }
+.as-media.music:not(.big) .as-video { aspect-ratio: 16 / 5; }
+.as-mtitle { padding: 6px 10px 0; font-weight: 600; font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.as-mctl { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 6px 8px; }
+.as-seek { flex: 1 1 120px; min-width: 80px; accent-color: var(--accent); }
+.as-vol { width: 70px; accent-color: var(--accent); }
+.as-time { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.as-mctl select { width: auto; min-height: 30px; padding: 2px 6px; }
+.as-queue { max-height: 110px; overflow-y: auto; margin: 0; padding: 0 8px 8px 28px; font-size: var(--fs-xs); }
+.as-queue li.on { color: var(--accent); }
+.as-queue button { background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 2px 0; }
+
+/* ----------------------------------------------------------- settings --- */
+.as-preview { display: flex; justify-content: center; padding: 18px 0; overflow: hidden; max-width: 100%; }
+.as-look input[type=color] { width: 64px; height: 36px; padding: 2px; border-radius: var(--radius-s); border: 1px solid var(--line); background: var(--field-bg); }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 6px currentColor; vertical-align: -1px; }
+label.f .row input[type=range] { flex: 1; }
+label.f small { display: block; margin-top: 4px; }

@@ -1,0 +1,478 @@
+/* ===========================================================================
+   app/theme/code-themes.css — the code colour schemes.
+   ---------------------------------------------------------------------------
+   Two independent choices, deliberately kept apart:
+
+     data-palette    → the SITE theme.  Paper, ink, accent, the whole chrome.
+     data-codetheme  → the CODE theme.  Only what appears inside a code block,
+                       a code sample, or the editor.
+
+   They are separate because they answer different questions. The site palette
+   is about reading prose for an hour; the code theme is about staring at a
+   <cfquery> until you see the bug. Plenty of people want a warm light page
+   and a black editor, and no single "dark mode" switch can give them that.
+
+   When no data-codetheme is stamped, the code tokens come from the palette —
+   the studio looks exactly as it did before this file existed. Stamping a
+   theme overrides that layer and nothing else.
+
+   TOKEN SET  (a theme must define every one; a half-defined theme inherits a
+   colour from the palette and reads as a bug)
+
+     --code-bg     the ground              --cf-tag    <cfquery, </cfif
+     --code-ink    unclassified text       --cf-attr   name=, datasource=
+     --code-rule   borders, the gutter     --cf-str    "quoted values"
+     --code-gut    line numbers            --cf-hash   #interpolation#
+     --code-sel    selection               --cf-com    <!--- comments --->
+     --code-caret  the caret               --cf-html   <table>, <td>
+     --code-active the current line        --cf-num    numeric literals
+                                           --cf-fn     numberFormat(
+                                           --cf-kw     if, var, AND, SELECT
+                                           --cf-op     = + - GT
+                                           --cf-punct  ( ) , ;
+
+   CONTRAST. Every token was measured against its own --code-bg. The floor is
+   4.5:1 for anything that carries meaning, with two deliberate exceptions
+   held at 3.4:1 or better: comments (which are meant to recede) and
+   punctuation (which is structural, never semantic). "Contrast" clears 7:1
+   on every token including those two.
+   =========================================================================== */
+
+/* -------------------------------------------------------------- 0 · AUTO */
+/* No stamp. The six palette tokens still drive the highlighter, and the six
+   NEW tokens derive from them, so an un-stamped studio is fully painted and
+   a palette that predates this file needs no edit.                          */
+:root {
+  --cf-num:    var(--cf-attr);
+  --cf-fn:     var(--cf-hash);
+  --cf-kw:     var(--cf-tag);
+  --cf-op:     var(--cf-html);
+  --cf-punct:  var(--code-gut);
+  --code-sel:    color-mix(in srgb, var(--cf-tag) 26%, transparent);
+  --code-caret:  var(--cf-tag);
+  --code-active: color-mix(in srgb, var(--cf-tag) 7%, transparent);
+  --codetheme-name: "Match the site";
+}
+
+/* ------------------------------------------------------------ 1 · LANTERN */
+/* Brass on ink. The studio's own voice, pinned so it stays put when the site
+   palette changes underneath it.                                            */
+[data-codetheme="lantern"] {
+  --codetheme-name: "Lantern";
+  --code-bg:     #1B160E;
+  --code-ink:    #E7DDC9;
+  --code-rule:   #342C1E;
+  --code-gut:    #8A7C60;
+  --code-sel:    rgba(224,169,78,.26);
+  --code-caret:  #E0A94E;
+  --code-active: rgba(224,169,78,.07);
+
+  --cf-tag:      #E0A94E;
+  --cf-attr:     #B6CC88;
+  --cf-str:      #DFA672;
+  --cf-hash:     #7DC0C5;
+  --cf-com:      #857A63;
+  --cf-html:     #9DAA97;
+  --cf-num:      #D7B7E0;
+  --cf-fn:       #8FD3D8;
+  --cf-kw:       #EBBF74;
+  --cf-op:       #C6B79A;
+  --cf-punct:    #9C8F76;
+}
+
+/* ----------------------------------------------------------- 2 · MIDNIGHT */
+/* Cold blue-black, the temperature most editors default to. Here because the
+   most common request from anyone who writes code all day is "give me the
+   dark blue one".                                                           */
+[data-codetheme="midnight"] {
+  --codetheme-name: "Midnight";
+  --code-bg:     #101620;
+  --code-ink:    #D6DEEA;
+  --code-rule:   #222D3D;
+  --code-gut:    #6C7C93;
+  --code-sel:    rgba(111,193,240,.24);
+  --code-caret:  #6FC1F0;
+  --code-active: rgba(111,193,240,.06);
+
+  --cf-tag:      #6FC1F0;
+  --cf-attr:     #8FD6B4;
+  --cf-str:      #E2A96B;
+  --cf-hash:     #F0A7C4;
+  --cf-com:      #6A7A90;
+  --cf-html:     #9FB0C6;
+  --cf-num:      #C7A9F0;
+  --cf-fn:       #7FD4E0;
+  --cf-kw:       #8AB4F8;
+  --cf-op:       #B7C4D6;
+  --cf-punct:    #8494AA;
+}
+
+/* ------------------------------------------------------------- 3 · VESPER */
+/* Amethyst on aubergine. The one that is unmistakably not a default.        */
+[data-codetheme="vesper"] {
+  --codetheme-name: "Vesper";
+  --code-bg:     #17111F;
+  --code-ink:    #E4DCEE;
+  --code-rule:   #2D2340;
+  --code-gut:    #8578A0;
+  --code-sel:    rgba(217,166,245,.26);
+  --code-caret:  #D9A6F5;
+  --code-active: rgba(217,166,245,.07);
+
+  --cf-tag:      #D9A6F5;
+  --cf-attr:     #8FE0D2;
+  --cf-str:      #F0AE8C;
+  --cf-hash:     #94C9F5;
+  --cf-com:      #7E718F;
+  --cf-html:     #AEA2BE;
+  --cf-num:      #F3C9E4;
+  --cf-fn:       #9FE4D8;
+  --cf-kw:       #E3B8F8;
+  --cf-op:       #C2B4D2;
+  --cf-punct:    #9689A8;
+}
+
+/* -------------------------------------------------------------- 4 · SLATE */
+/* Neutral grey-black with no temperature at all. For long sessions, and for
+   anyone who finds a coloured ground tiring.                                */
+[data-codetheme="slate"] {
+  --codetheme-name: "Slate";
+  --code-bg:     #16181A;
+  --code-ink:    #DCDFE2;
+  --code-rule:   #2A2E32;
+  --code-gut:    #7C8388;
+  --code-sel:    rgba(220,223,226,.20);
+  --code-caret:  #E4B872;
+  --code-active: rgba(255,255,255,.04);
+
+  --cf-tag:      #E4B872;
+  --cf-attr:     #A9CE8B;
+  --cf-str:      #DDA07A;
+  --cf-hash:     #7ECAD0;
+  --cf-com:      #7B8288;
+  --cf-html:     #A6AEB4;
+  --cf-num:      #C9B2E4;
+  --cf-fn:       #8FD0D6;
+  --cf-kw:       #EFC589;
+  --cf-op:       #BFC5CA;
+  --cf-punct:    #91989E;
+}
+
+/* ------------------------------------------------------------- 5 · HARBOR */
+/* A LIGHT code theme, sea-glass ground. Light code on a light page is the
+   combination the studio could not offer at all before this file.           */
+[data-codetheme="harbor"] {
+  --codetheme-name: "Harbor";
+  --code-bg:     #F2F7FA;
+  --code-ink:    #1B2733;
+  --code-rule:   #D3E0E9;
+  --code-gut:    #6B808F;
+  --code-sel:    rgba(21,101,158,.18);
+  --code-caret:  #15659E;
+  --code-active: rgba(21,101,158,.05);
+
+  --cf-tag:      #15659E;
+  --cf-attr:     #266B4A;
+  --cf-str:      #9A4B12;
+  --cf-hash:     #8A2F6E;
+  --cf-com:      #6C7A85;
+  --cf-html:     #4A5C6B;
+  --cf-num:      #6B3FB0;
+  --cf-fn:       #10606A;
+  --cf-kw:       #0F5590;
+  --cf-op:       #40515F;
+  --cf-punct:    #64757F;
+}
+
+/* ------------------------------------------------------------ 6 · FOOLSCAP */
+/* Warm light, printed-page contrast. Reads like CFML in a book, which is
+   exactly what you want when you are reading rather than typing.            */
+[data-codetheme="foolscap"] {
+  --codetheme-name: "Foolscap";
+  --code-bg:     #FBF6EA;
+  --code-ink:    #2A2116;
+  --code-rule:   #E3D6BC;
+  --code-gut:    #8A7A5E;
+  --code-sel:    rgba(143,90,8,.18);
+  --code-active: rgba(143,90,8,.05);
+  --code-caret:  #8F5A08;
+
+  --cf-tag:      #8F5A08;
+  --cf-attr:     #3F6B22;
+  --cf-str:      #9C3A17;
+  --cf-hash:     #14605C;
+  --cf-com:      #7E7358;
+  --cf-html:     #5A5340;
+  --cf-num:      #6A3E9C;
+  --cf-fn:       #0F5E60;
+  --cf-kw:       #7A4A06;
+  --cf-op:       #4E4636;
+  --cf-punct:    #7A705C;
+}
+
+/* -------------------------------------------------------------- 7 · LARKSPUR */
+/* The case study's colours — a calm blue with an orange accent — applied to
+   code.                                                                     */
+[data-codetheme="larkspur"] {
+  --codetheme-name: "Larkspur";
+  --code-bg:     #12161D;
+  --code-ink:    #DCE1EA;
+  --code-rule:   #232B37;
+  --code-gut:    #74809A;
+  --code-sel:    rgba(150,164,190,.26);
+  --code-caret:  #F59A28;
+  --code-active: rgba(245,154,40,.07);
+
+  --cf-tag:      #96A4BE;      /* --vi-blue, lifted for a dark ground */
+  --cf-attr:     #9EC3A6;
+  --cf-str:      #F5B45E;      /* --vi-orange family */
+  --cf-hash:     #7FC6C7;      /* --vi-teal-700 family */
+  --cf-com:      #6E7789;
+  --cf-html:     #A8AFA0;      /* --vi-olive family */
+  --cf-num:      #C6B0D8;
+  --cf-fn:       #86CBCC;
+  --cf-kw:       #AEBBD2;
+  --cf-op:       #B4BCC9;
+  --cf-punct:    #8B94A6;
+}
+
+/* ----------------------------------------------------------- 8 · CONTRAST */
+/* Every token above 7:1 on black, comments and punctuation included. For low
+   vision, for projectors, and for a bright room. Nothing here is decorative. */
+[data-codetheme="contrast"] {
+  --codetheme-name: "High contrast";
+  --code-bg:     #000000;
+  --code-ink:    #FFFFFF;
+  --code-rule:   #454545;
+  --code-gut:    #B9B9B9;
+  --code-sel:    rgba(255,214,102,.34);
+  --code-caret:  #FFD666;
+  --code-active: rgba(255,255,255,.09);
+
+  --cf-tag:      #FFD666;
+  --cf-attr:     #92E88B;
+  --cf-str:      #FFB27A;
+  --cf-hash:     #7FE3EC;
+  --cf-com:      #B9B9B9;
+  --cf-html:     #D2D2D2;
+  --cf-num:      #E2B6FF;
+  --cf-fn:       #8FE9E4;
+  --cf-kw:       #FFE28A;
+  --cf-op:       #E8E8E8;
+  --cf-punct:    #C8C8C8;
+}
+
+/* --------------------------------------------------------------- 9 · MONO */
+/* Almost no colour. Structure carries in weight and italics instead, which is
+   how code looks on paper — and how it looks to a monochromat.              */
+[data-codetheme="mono"] {
+  --codetheme-name: "Monochrome";
+  --code-bg:     #14150F;
+  --code-ink:    #DEDCD2;
+  --code-rule:   #2C2E26;
+  --code-gut:    #7F8177;
+  --code-sel:    rgba(222,220,210,.22);
+  --code-caret:  #DEDCD2;
+  --code-active: rgba(255,255,255,.04);
+
+  --cf-tag:      #FFFFFF;
+  --cf-attr:     #C2C0B6;
+  --cf-str:      #ADABA1;
+  --cf-hash:     #FFFFFF;
+  --cf-com:      #85877D;
+  --cf-html:     #A8A69C;
+  --cf-num:      #C2C0B6;
+  --cf-fn:       #E8E6DC;
+  --cf-kw:       #FFFFFF;
+  --cf-op:       #B5B3A9;
+  --cf-punct:    #96988E;
+}
+[data-codetheme="mono"] .tok-tag,
+[data-codetheme="mono"] .tok-kw   { font-weight: 700; }
+[data-codetheme="mono"] .tok-hash { font-weight: 600; text-decoration: underline; text-decoration-color: rgba(255,255,255,.28); }
+[data-codetheme="mono"] .tok-str  { font-style: italic; }
+
+/* ==========================================================================
+   TOKEN CLASSES
+   The six original classes live in styles.css and stay there; these are the
+   ones the richer highlighter added. Kept beside the themes so that adding a
+   token means editing one file, not two.
+   ========================================================================== */
+.tok-num   { color: var(--cf-num); }
+.tok-fn    { color: var(--cf-fn); }
+.tok-kw    { color: var(--cf-kw); font-weight: 600; }
+.tok-op    { color: var(--cf-op); }
+.tok-punct { color: var(--cf-punct); }
+.tok-sql   { color: var(--cf-kw); font-weight: 600; }
+.tok-err   { color: var(--bad); text-decoration: underline wavy var(--bad); text-underline-offset: 3px; }
+
+/* ==========================================================================
+   THE EDITOR OVERLAY
+   A textarea cannot colour its own text, so the editor stacks a highlighted
+   <pre> underneath a transparent-text textarea. The two MUST agree on every
+   metric that affects where a glyph lands — font, size, line-height, padding,
+   letter-spacing, tab-size, wrapping — or the illusion breaks the moment a
+   line gets long. Both sides inherit from .edcode for exactly that reason.
+   ========================================================================== */
+.edstack { position: relative; display: block; }
+.edstack .edcode,
+.edstack textarea.editor {
+  /* The editor settings (editor-prefs.js) set these variables on <html>; the
+     fallbacks are the studio's original metrics. The gutter reads the same
+     three, so line numbers stay level with their lines. */
+  font-family: var(--ed-font, var(--mono));
+  font-size: var(--ed-size, 12.5px);
+  line-height: var(--ed-lh, 1.65);
+  padding: 12px 14px;
+  tab-size: var(--ed-tab, 2);
+  letter-spacing: var(--ed-ls, 0);
+  font-variant-ligatures: var(--ed-lig, none);
+  font-feature-settings: normal;
+  white-space: pre;
+  overflow-wrap: normal;
+  border: 0;
+  margin: 0;
+}
+.edstack .edcode {
+  position: absolute; inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--code-ink);
+  background: var(--code-bg);
+  z-index: 0;
+}
+.edstack textarea.editor {
+  position: relative; z-index: 1;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--code-caret);
+  overflow-x: auto;
+  width: 100%; display: block;
+  resize: vertical; min-height: 150px;
+}
+.edstack textarea.editor::selection { background: var(--code-sel); color: transparent; }
+.edstack textarea.editor::-moz-selection { background: var(--code-sel); color: transparent; }
+
+/* The overlay scrolls with the textarea; JS keeps the two offsets in step. */
+.edstack .edcode > pre { margin: 0; font: inherit; white-space: pre; }
+
+/* Fallback: if the overlay is switched off (or JS has not run yet) the
+   textarea paints its own text, so the editor is never invisible. */
+.edstack.plain textarea.editor { color: var(--code-ink); background: var(--code-bg); }
+.edstack.plain .edcode { display: none; }
+
+/* ==========================================================================
+   THE PICKER
+   Two rows, labelled, in Settings. The code swatch previews its own theme by
+   stamping data-codetheme on the swatch itself, which works because the
+   theme blocks above select on the attribute rather than on :root.
+   ========================================================================== */
+.themerow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 18px; }
+.themerow .lab { font-size: 12px; color: var(--muted); min-width: 92px; }
+.codeswatch {
+  width: 58px; height: 34px; border-radius: 7px; border: 1px solid var(--rule);
+  background: var(--code-bg); padding: 0; overflow: hidden; position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+}
+.codeswatch:hover { border-color: var(--accent); }
+.codeswatch[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.codeswatch i { display: block; width: 6px; height: 6px; border-radius: 2px; }
+.codeswatch i:nth-child(1) { background: var(--cf-tag); }
+.codeswatch i:nth-child(2) { background: var(--cf-str); }
+.codeswatch i:nth-child(3) { background: var(--cf-hash); }
+.codeswatch i:nth-child(4) { background: var(--cf-attr); }
+.codeswatch i:nth-child(5) { background: var(--cf-com); }
+.codeswatch .nm {
+  position: absolute; inset: auto 0 0 0; font-size: 8px; text-align: center;
+  color: var(--code-gut); font-family: var(--mono); line-height: 1.4;
+}
+.themepreview { border-radius: 9px; overflow: hidden; border: 1px solid var(--code-rule); margin-top: 6px; }
+
+/* ==========================================================================
+   EDITOR OPTIONS (editor-prefs.js)
+   Everything below changes how code looks, never where a glyph sits: the
+   whitespace dots are absolutely placed pseudo-elements, the indent guides
+   are inset shadows, the matched-bracket box is an outline. None of them has
+   a width, so the overlay stays aligned with the textarea above it.
+   ========================================================================== */
+
+/* bracket pairs, by depth. The three depth colours reuse token colours every
+   theme has already measured against its own background; a theme may pin
+   its own with --cf-bp1..3. An unmatched bracket is flagged. */
+.bp1 { color: var(--cf-bp1, var(--cf-hash)); }
+.bp2 { color: var(--cf-bp2, var(--cf-attr)); }
+.bp3 { color: var(--cf-bp3, var(--cf-num)); }
+.bpx { color: var(--bad); }
+.bp.bm {
+  outline: 1px solid var(--code-caret); outline-offset: -1px; border-radius: 2px;
+  background: color-mix(in srgb, var(--code-caret) 16%, transparent);
+}
+
+/* whitespace dots and tab arrows */
+.ws { position: relative; }
+.ws::before {
+  content: "\00B7"; position: absolute; left: 0; right: 0; top: 0;
+  text-align: center; color: var(--code-gut); opacity: .7; pointer-events: none;
+}
+/* A tab is drawn as a line, not a glyph: Chrome measures a tab inside a
+   positioned span that has a pseudo-element to the wrong tab stop, so a tab
+   gets no ::before and no positioning at all. (Not ".tab": that is the
+   studio's tab-strip button, and its padding would widen the tab.) */
+.ws.wst {
+  position: static;
+  background-image: linear-gradient(color-mix(in srgb, var(--code-gut) 60%, transparent), color-mix(in srgb, var(--code-gut) 60%, transparent));
+  background-repeat: no-repeat; background-size: calc(100% - 6px) 1px; background-position: 3px 55%;
+}
+.ws.wst::before { content: none; }
+
+/* indent guides: one faint line at each indent step */
+.ig { box-shadow: inset 1px 0 0 color-mix(in srgb, var(--code-gut) 45%, transparent); }
+
+/* line markers carry no content; they exist so a wrapped editor can find where a line starts */
+.edcode i.ln { font-style: normal; }
+
+/* the current line, under the text */
+.edcur {
+  position: absolute; left: 0; right: 0; pointer-events: none; display: none; z-index: 0;
+  background: var(--code-active);
+}
+
+/* word wrap: both layers wrap the same way, and both reserve the same
+   scrollbar space so they have the same width to wrap in */
+[data-ed-wrap="on"] .edstack .edcode,
+[data-ed-wrap="on"] .edstack textarea.editor,
+[data-ed-wrap="on"] .edstack .edcode > pre {
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal;
+}
+[data-ed-wrap="on"] .edstack .edcode,
+[data-ed-wrap="on"] .edstack textarea.editor { scrollbar-gutter: stable; overflow-x: hidden; }
+
+/* line numbers off */
+[data-ed-lines="off"] .edwrap { grid-template-columns: 1fr; }
+[data-ed-lines="off"] .edwrap .gutter { display: none; }
+.gutter .cur { color: var(--code-ink); }
+
+/* a fixed-height editor scrolls inside itself; the gutter follows, and the
+   overview ruler on the right shows where the marks are in the whole file */
+[data-ed-fixed="on"] .edstack textarea.editor { resize: none; overflow-y: auto; scrollbar-gutter: stable; }
+[data-ed-fixed="on"] .edstack .edcode { scrollbar-gutter: stable; overflow-y: hidden; }
+[data-ed-fixed="on"] .edwrap .gutter { overflow: hidden; }
+.edruler {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 7px; z-index: 2;
+  pointer-events: none; display: none;
+  background: color-mix(in srgb, var(--code-rule) 60%, transparent);
+}
+[data-ed-fixed="on"] .edruler { display: block; }
+.edruler b { position: absolute; left: 0; right: 0; height: 3px; border-radius: 1px; background: var(--code-gut); }
+.edruler b.err { background: var(--bad); }
+.edruler b.warn { background: var(--warn); }
+.edruler b.debug { background: var(--warn); height: 4px; }
+.edruler b.caret { background: var(--code-caret); height: 2px; opacity: .8; }
+
+/* the short note Ctrl+M shows ("Tab now moves to the next control") */
+.edtoast {
+  position: absolute; right: 12px; bottom: 8px; z-index: 3; pointer-events: none;
+  font-family: var(--sans, sans-serif); font-size: 12px; padding: 4px 9px; border-radius: 6px;
+  background: var(--code-ink); color: var(--code-bg); opacity: 0; transition: opacity .15s ease;
+}
+.edtoast.on { opacity: .92; }

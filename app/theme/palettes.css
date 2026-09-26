@@ -1,0 +1,485 @@
+/* ===========================================================================
+   app/theme/palettes.css — the four Lantern palettes.
+   Single source of truth, shared by the catalogue, the CFML studio, and the
+   app when it exists.
+
+     parchment   light · warm   brass on oat paper, deep teal secondary
+     lamplight   dark  · warm   brass on green-black, cold cyan secondary
+     harbor      light · cool   azure on sea glass, violet secondary
+     vesper      dark  · cool   amethyst on aubergine, aqua secondary
+
+   Each palette carries TWO chromatic voices, not one: --accent does the
+   work (links, buttons, the current item) and --accent-2 provides the
+   counter-note (objectives rail, takeaways, the far end of the progress
+   bar). A single accent on a neutral ground is what makes a theme feel
+   like a default; the second hue is what gives it a temperature.
+
+   Selection:
+     - no stamp            → parchment, or lamplight if the OS prefers dark
+     - data-palette="…"    → that palette wins in both directions.
+                             The stamp works on ANY element, not just <html>,
+                             so a settings screen can preview all four inline.
+
+   Rules obeyed here, deliberately:
+     1. The bare :root block defines the COMPLETE token set, so the
+        un-stamped state is never half-painted.
+     2. Media and stamp blocks redefine tokens only — never components.
+     3. Semantic colour (ok / bad / warn / info) is held clear of both
+        accents in hue, so a palette change never makes "failed" read as
+        "passed", and a warning never reads as a link.
+     4. The stage ramp is DATA. Its progression (young green → mature
+        green → harvest gold → worked materials) is the same in every
+        palette; only its lightness shifts to sit on the ground.
+   =========================================================================== */
+
+/* ---------------------------------------------------------- 1 · PARCHMENT */
+/* Oat paper with the warmth left in, ink browned rather than blacked, brass
+   for the work and a deep teal underneath it. An almanac, not a document.  */
+:root,
+[data-palette="parchment"] {
+  --palette-name: "Parchment";
+
+  --paper:       #F8F2E6;
+  --raised:      #F1E8D6;
+  --sunk:        #E8DDC5;
+  --rule:        #D9CBAF;
+  --rule-2:      #C0AE8C;
+
+  --ink:         #221B12;
+  --ink-2:       #4C4033;
+  --muted:       #6F6249;
+
+  --accent:      #8F5A08;
+  --accent-2:    #16645C;
+  --accent-soft: #F0E1C2;
+  --accent2-soft:#D8E8E4;
+  --ring:        #B4791F;
+  --on-accent:   #FFFFFF;
+  --page-bg:     #FFFFFF;
+  --page-ink:    #141414;
+
+  --ok:   #2E6B3E;  --ok-soft:   #E0EEDD;
+  --bad:  #9E2233;  --bad-soft:  #F8E1E3;
+  --warn: #984407;  --warn-soft: #FBE7D5;
+  --info: #1C5A78;  --info-soft: #DDEAF1;
+
+  --code-bg:   #1B160E;
+  --code-ink:  #E7DDC9;
+  --code-rule: #342C1E;
+  --code-gut:  #7A6E56;
+  --cf-tag:    #E0A94E;
+  --cf-attr:   #A8BE7C;
+  --cf-str:    #D39A63;
+  --cf-hash:   #7DC0C5;
+  --cf-com:    #6B6250;
+  --cf-html:   #93A08D;
+
+  --top-grad: linear-gradient(180deg, #F5EBD6 0%, #F1E8D6 100%);
+
+  --stage-seedling:   #6FAE5C;
+  --stage-sprout:     #559A52;
+  --stage-sapling:    #3F8248;
+  --stage-grove:      #2E663F;
+  --stage-timber:     #204D36;
+  --stage-harvest:    #A87C1B;
+  --stage-collegiate: #8A452B;
+  --stage-journeyman: #4E5A66;
+  --stage-any:        #6D6086;
+
+  --shadow: 0 1px 2px rgba(34,27,18,.07), 0 4px 14px rgba(34,27,18,.06);
+  color-scheme: light;
+}
+
+/* ---------------------------------------------------------- 2 · LAMPLIGHT */
+/* Green-black night with a brass lamp in it. The counter-note is cold cyan —
+   the colour of the window when the lamp is the only warm thing in a room. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-palette]) {
+    --palette-name: "Lamplight";
+
+    --paper:       #10130E;
+    --raised:      #191D15;
+    --sunk:        #232820;
+    --rule:        #31382A;
+    --rule-2:      #4A5341;
+
+    --ink:         #EDE7D6;
+    --ink-2:       #BCB49C;
+    --muted:       #8E8871;
+
+    --accent:      #E8C05C;
+    --accent-2:    #62B8C4;
+    --accent-soft: #2C2513;
+    --accent2-soft:#132628;
+    --ring:        #E8C05C;
+    --on-accent:   #191307;
+    --page-bg:     #F7F4EC;
+    --page-ink:    #141414;
+
+    --ok:   #86C795;  --ok-soft:   #1A2A1E;
+    --bad:  #EE8A72;  --bad-soft:  #2F1D17;
+    --warn: #D9903A;  --warn-soft: #2C2213;
+    --info: #7FB8D4;  --info-soft: #16242C;
+
+    --code-bg:   #0C0F0B;
+    --code-ink:  #E4DECB;
+    --code-rule: #232A20;
+    --code-gut:  #6E7A62;
+    --cf-tag:    #E8C05C;
+    --cf-attr:   #A6CE86;
+    --cf-str:    #D8A56B;
+    --cf-hash:   #7FCEDA;
+    --cf-com:    #5D6A55;
+    --cf-html:   #8AA396;
+
+    --top-grad: linear-gradient(180deg, #1C2118 0%, #191D15 100%);
+
+    --stage-seedling:   #A2D68C;
+    --stage-sprout:     #85C47F;
+    --stage-sapling:    #72B078;
+    --stage-grove:      #5B996C;
+    --stage-timber:     #4A8060;
+    --stage-harvest:    #E0B84F;
+    --stage-collegiate: #DA8A66;
+    --stage-journeyman: #97A6B4;
+    --stage-any:        #B4A3CC;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 4px 18px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+[data-palette="lamplight"] {
+  --palette-name: "Lamplight";
+
+  --paper:       #10130E;
+  --raised:      #191D15;
+  --sunk:        #232820;
+  --rule:        #31382A;
+  --rule-2:      #4A5341;
+
+  --ink:         #EDE7D6;
+  --ink-2:       #BCB49C;
+  --muted:       #8E8871;
+
+  --accent:      #E8C05C;
+  --accent-2:    #62B8C4;
+  --accent-soft: #2C2513;
+  --accent2-soft:#132628;
+  --ring:        #E8C05C;
+  --on-accent:   #191307;
+  --page-bg:     #F7F4EC;
+  --page-ink:    #141414;
+
+  --ok:   #86C795;  --ok-soft:   #1A2A1E;
+  --bad:  #EE8A72;  --bad-soft:  #2F1D17;
+  --warn: #D9903A;  --warn-soft: #2C2213;
+  --info: #7FB8D4;  --info-soft: #16242C;
+
+  --code-bg:   #0C0F0B;
+  --code-ink:  #E4DECB;
+  --code-rule: #232A20;
+  --code-gut:  #6E7A62;
+  --cf-tag:    #E8C05C;
+  --cf-attr:   #A6CE86;
+  --cf-str:    #D8A56B;
+  --cf-hash:   #7FCEDA;
+  --cf-com:    #5D6A55;
+  --cf-html:   #8AA396;
+
+  --top-grad: linear-gradient(180deg, #1C2118 0%, #191D15 100%);
+
+  --stage-seedling:   #A2D68C;
+  --stage-sprout:     #85C47F;
+  --stage-sapling:    #72B078;
+  --stage-grove:      #5B996C;
+  --stage-timber:     #4A8060;
+  --stage-harvest:    #E0B84F;
+  --stage-collegiate: #DA8A66;
+  --stage-journeyman: #97A6B4;
+  --stage-any:        #B4A3CC;
+
+  --shadow: 0 1px 2px rgba(0,0,0,.5), 0 4px 18px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+/* ------------------------------------------------------------- 3 · HARBOR */
+/* Sea glass. The ground genuinely carries blue rather than being grey with a
+   blue accent stapled on, the ink is a deep navy, and a violet secondary
+   keeps it from going flat. Violet, not coral: coral sat too close to the
+   crimson used for errors, and a takeaways border must never read as one.  */
+[data-palette="harbor"] {
+  --palette-name: "Harbor";
+
+  --paper:       #EFF4FA;
+  --raised:      #E2EBF5;
+  --sunk:        #D3E0EE;
+  --rule:        #BDD0E3;
+  --rule-2:      #9BB4CE;
+
+  --ink:         #0B2233;
+  --ink-2:       #2E4A61;
+  --muted:       #546C82;
+
+  --accent:      #0A70B5;
+  --accent-2:    #5B4CA8;
+  --accent-soft: #D6E7F7;
+  --accent2-soft:#E5E2F5;
+  --ring:        #1B8AD4;
+  --on-accent:   #FFFFFF;
+  --page-bg:     #FFFFFF;
+  --page-ink:    #141414;
+
+  --ok:   #0F6B57;  --ok-soft:   #D6EDE6;
+  --bad:  #A82838;  --bad-soft:  #F9DFE2;
+  --warn: #8F6009;  --warn-soft: #F8EACF;
+  --info: #0A70B5;  --info-soft: #D6E7F7;
+
+  --code-bg:   #0B1622;
+  --code-ink:  #D3E1EF;
+  --code-rule: #1B2C3E;
+  --code-gut:  #5E748B;
+  --cf-tag:    #6FC1F0;
+  --cf-attr:   #7FD3B4;
+  --cf-str:    #E0A878;
+  --cf-hash:   #A9C8F5;
+  --cf-com:    #55697E;
+  --cf-html:   #7C90A6;
+
+  --top-grad: linear-gradient(180deg, #E6EFF9 0%, #E2EBF5 100%);
+
+  --stage-seedling:   #5FA65F;
+  --stage-sprout:     #46915A;
+  --stage-sapling:    #347C58;
+  --stage-grove:      #276655;
+  --stage-timber:     #1E4F53;
+  --stage-harvest:    #96700F;
+  --stage-collegiate: #A03F30;
+  --stage-journeyman: #3E5570;
+  --stage-any:        #5E5C93;
+
+  --shadow: 0 1px 2px rgba(11,34,51,.08), 0 4px 16px rgba(11,34,51,.07);
+  color-scheme: light;
+}
+
+/* ------------------------------------------------------------- 4 · VESPER */
+/* Evening prayer. Deep aubergine, amethyst for the work, and an aqua
+   counter-note so the purple has something to be purple against.          */
+[data-palette="vesper"] {
+  --palette-name: "Vesper";
+
+  --paper:       #171029;
+  --raised:      #211838;
+  --sunk:        #2C2145;
+  --rule:        #3B2F5B;
+  --rule-2:      #55437E;
+
+  --ink:         #F0EAFA;
+  --ink-2:       #C4B7DE;
+  --muted:       #9A8DB8;
+
+  --accent:      #C48CF0;
+  --accent-2:    #6FD0D8;
+  --accent-soft: #2E2148;
+  --accent2-soft:#152F34;
+  --ring:        #C48CF0;
+  --on-accent:   #23103A;
+  --page-bg:     #F7F4FB;
+  --page-ink:    #141414;
+
+  --ok:   #82CBA0;  --ok-soft:   #182D24;
+  --bad:  #F28CA4;  --bad-soft:  #341B28;
+  --warn: #EFBA5E;  --warn-soft: #2F2617;
+  --info: #93B8F5;  --info-soft: #1C2445;
+
+  --code-bg:   #100A1C;
+  --code-ink:  #E6DEF5;
+  --code-rule: #261C3C;
+  --code-gut:  #6F6390;
+  --cf-tag:    #D9A6F5;
+  --cf-attr:   #8FE0C4;
+  --cf-str:    #F0BE86;
+  --cf-hash:   #8FD4F0;
+  --cf-com:    #675A88;
+  --cf-html:   #9188B0;
+
+  --top-grad: linear-gradient(180deg, #261B40 0%, #211838 100%);
+
+  --stage-seedling:   #A5DD8F;
+  --stage-sprout:     #8ACB89;
+  --stage-sapling:    #77B884;
+  --stage-grove:      #5FA07C;
+  --stage-timber:     #4E8872;
+  --stage-harvest:    #EFBA5E;
+  --stage-collegiate: #F09A7C;
+  --stage-journeyman: #9FADC8;
+  --stage-any:        #C48CF0;
+
+  --shadow: 0 1px 2px rgba(0,0,0,.5), 0 6px 22px rgba(0,0,0,.4);
+  color-scheme: dark;
+}
+
+/* ------------------------------------------------------------ the picker */
+.palette-picker { display: flex; align-items: center; gap: 5px; }
+/* A class with display:flex beats the browser’s own [hidden] rule, so the
+   component has to opt back in — otherwise hiding the picker does nothing. */
+.palette-picker[hidden] { display: none; }
+.swatch {
+  width: 26px; height: 26px; border-radius: 50%; padding: 0;
+  border: 1px solid var(--rule-2); cursor: pointer; position: relative;
+  display: grid; place-items: center; overflow: hidden;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.swatch:hover { border-color: var(--ink-2); transform: translateY(-1px) scale(1.06); }
+.swatch i { position: absolute; inset: 0; display: block; }
+.swatch i::before,
+.swatch i::after { content: ""; position: absolute; inset: 0; }
+/* three wedges: ground, accent, secondary — so a swatch shows the whole idea */
+.swatch i::after { clip-path: polygon(100% 0, 100% 100%, 30% 100%); }
+.swatch b {
+  position: absolute; inset: 0; display: block; z-index: 1;
+  clip-path: polygon(100% 0, 45% 100%, 100% 100%);
+}
+.swatch[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 3px var(--accent); }
+
+.swatch.parchment i::before { background: #F8F2E6; } .swatch.parchment i::after { background: #8F5A08; } .swatch.parchment b { background: #16645C; }
+.swatch.lamplight i::before { background: #10130E; } .swatch.lamplight i::after { background: #E8C05C; } .swatch.lamplight b { background: #62B8C4; }
+.swatch.harbor    i::before { background: #EFF4FA; } .swatch.harbor    i::after { background: #0A70B5; } .swatch.harbor    b { background: #5B4CA8; }
+.swatch.vesper    i::before { background: #171029; } .swatch.vesper    i::after { background: #C48CF0; } .swatch.vesper    b { background: #6FD0D8; }
+
+/* -------------------------------------------------------------- 5 · LARKSPUR */
+/* The case study's colours: a calm blue (#5C739D) for actions, an orange
+   (#F59A28) accent, warm grey headings. Body text is #4A4A4A on the tinted
+   panels so it clears 4.5:1, and the blue on white measures 5.1:1.        */
+[data-palette="larkspur"] {
+  --palette-name: "Larkspur";
+
+  --paper:       #FFFFFF;
+  --raised:      #F4F6F9;
+  --sunk:        #E8ECF2;
+  --rule:        #DCE1E8;
+  --rule-2:      #B9C2CF;
+
+  --ink:         #2B2E33;
+  --ink-2:       #4A4A4A;   /* their body #555 nudged for contrast on tint  */
+  --muted:       #6B7280;   /* their #808080 fails 4.5:1; this passes       */
+
+  --accent:      #5C739D;   /* [THEME] color_18 · primary action            */
+  --accent-2:    #A3671B;   /* orange-700: the CTA hue, dark enough to read */
+  --accent-soft: #E4E9F1;
+  --accent2-soft:#FCEEDA;
+  --ring:        #3D4D69;
+  --on-accent:   #FFFFFF;
+  --page-bg:     #FFFFFF;
+  --page-ink:    #2B2E33;
+
+  --ok:   #2B5455;  --ok-soft:   #DDE9E9;   /* their teal-700 as success    */
+  --bad:  #A3372B;  --bad-soft:  #F7E2DF;
+  --warn: #A3671B;  --warn-soft: #FCEEDA;   /* [THEME] color_29             */
+  --info: #5C739D;  --info-soft: #E4E9F1;
+
+  --code-bg:   #1F2634;   /* [THEME] color_20 · their darkest blue          */
+  --code-ink:  #DCE1E8;
+  --code-rule: #333C4E;
+  --code-gut:  #7C889C;
+  --cf-tag:    #96A4BE;   /* [THEME] color_17                               */
+  --cf-attr:   #BAD4D4;   /* [THEME] color_31                               */
+  --cf-str:    #F8CA90;   /* [THEME] color_27                               */
+  --cf-hash:   #F59A28;   /* [THEME] color_28 · the logo orange             */
+  --cf-com:    #70694E;   /* [THEME] color_24 · olive                       */
+  --cf-html:   #8EA9AA;   /* [THEME] color_32                               */
+
+  --top-grad: linear-gradient(180deg, #FFFFFF 0%, #F4F6F9 100%);
+
+  --stage-seedling:   #607F80;
+  --stage-sprout:     #2B5455;
+  --stage-sapling:    #3D4D69;
+  --stage-grove:      #5C739D;
+  --stage-timber:     #1F2634;
+  --stage-harvest:    #A3671B;
+  --stage-collegiate: #A3372B;
+  --stage-journeyman: #70694E;
+  --stage-any:        #57544C;
+
+  --shadow: 0 1px 2px rgba(43,46,51,.07), 0 4px 16px rgba(43,46,51,.06);
+  color-scheme: light;
+}
+
+.swatch.larkspur i::before { background: #FFFFFF; }
+.swatch.larkspur i::after  { background: #5C739D; }
+.swatch.larkspur b         { background: #F59A28; }
+
+/* ------------------------------------------------------- 6 · HIGH CONTRAST */
+/* For low vision, glare, or a projector in a bright room. Near-black ground,
+   white ink, a yellow accent and a cyan counter-note. Every text colour here,
+   the muted one and the four semantic ones included, measures 7:1 or better
+   against paper, raised AND sunk (scripts/test-editor.mjs checks it).     */
+[data-palette="contrast"] {
+  --palette-name: "High contrast";
+
+  --paper:       #0A0A0A;
+  --raised:      #141414;
+  --sunk:        #1E1E1E;
+  --rule:        #5A5A5A;
+  --rule-2:      #8A8A8A;
+
+  --ink:         #FFFFFF;
+  --ink-2:       #E6E6E6;
+  --muted:       #C8C8C8;
+
+  --accent:      #FFD24D;
+  --accent-2:    #7FE3EC;
+  --accent-soft: #3A2E00;
+  --accent2-soft:#06303A;
+  --ring:        #FFD24D;
+  --on-accent:   #000000;
+  --page-bg:     #FFFFFF;
+  --page-ink:    #000000;
+
+  --ok:   #7EE08A;  --ok-soft:   #0E2A12;
+  --bad:  #FF9A9A;  --bad-soft:  #3A0E0E;
+  --warn: #FFB25C;  --warn-soft: #3A2400;
+  --info: #8CC8FF;  --info-soft: #0C2438;
+
+  --code-bg:   #000000;
+  --code-ink:  #FFFFFF;
+  --code-rule: #454545;
+  --code-gut:  #B9B9B9;
+  --cf-tag:    #FFD666;
+  --cf-attr:   #92E88B;
+  --cf-str:    #FFB27A;
+  --cf-hash:   #7FE3EC;
+  --cf-com:    #B9B9B9;
+  --cf-html:   #D2D2D2;
+
+  --top-grad: linear-gradient(180deg, #141414 0%, #0A0A0A 100%);
+
+  --stage-seedling:   #9BE27F;
+  --stage-sprout:     #7FD67A;
+  --stage-sapling:    #6CC98A;
+  --stage-grove:      #5FC0A0;
+  --stage-timber:     #5CB8C0;
+  --stage-harvest:    #FFD24D;
+  --stage-collegiate: #FF9A7A;
+  --stage-journeyman: #B8C4D0;
+  --stage-any:        #D0B8FF;
+
+  --shadow: 0 0 0 1px #5A5A5A;
+  color-scheme: dark;
+}
+.swatch.contrast i::before { background: #0A0A0A; }
+.swatch.contrast i::after  { background: #FFD24D; }
+.swatch.contrast b         { background: #7FE3EC; }
+
+/* The sixth control in the header is not a palette: it opens the Appearance
+   page, where the code themes live. Drawn as a dotted ring so it reads as
+   "more" rather than as a colour you can pick. */
+.swatch.more { border-style: dashed; border-color: var(--rule-2); background: var(--sunk); }
+.swatch.more i::before { background: transparent; }
+.swatch.more i::after  { background: transparent; }
+.swatch.more b {
+  background: transparent; clip-path: none;
+  display: grid; place-items: center; color: var(--muted); font-size: 15px; line-height: 1;
+}
+.swatch.more b::after { content: "\2026"; }
+.swatch.more:hover { border-color: var(--accent); }
+.swatch.more:hover b { color: var(--accent); }

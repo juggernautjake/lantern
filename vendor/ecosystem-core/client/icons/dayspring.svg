@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Dayspring">
+  <!-- Dayspring: a sun rising over the horizon. Same 64-unit grid, 14-unit corner and 3.5 stroke as the Lantern mark. -->
+  <defs>
+    <linearGradient id="ds-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#141a4a"/><stop offset=".62" stop-color="#241f5e"/><stop offset="1" stop-color="#3b2566"/></linearGradient>
+    <linearGradient id="ds-sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe29a"/><stop offset="1" stop-color="#ff8fa3"/></linearGradient>
+    <linearGradient id="ds-line" gradientUnits="userSpaceOnUse" x1="11" y1="40" x2="53" y2="40"><stop offset="0" stop-color="#6ea8fe"/><stop offset=".45" stop-color="#a78bfa"/><stop offset=".75" stop-color="#ff8fa3"/><stop offset="1" stop-color="#ffd27a"/></linearGradient>
+    <radialGradient id="ds-glow" cx=".5" cy=".64" r=".45"><stop offset="0" stop-color="#ffb3c1" stop-opacity=".45"/><stop offset="1" stop-color="#ffb3c1" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#ds-bg)"/>
+  <rect width="64" height="64" rx="14" fill="url(#ds-glow)"/>
+  <path d="M20.5 40a11.5 11.5 0 0 1 23 0z" fill="url(#ds-sun)"/>
+  <g stroke="#ffd27a" stroke-width="3.5" stroke-linecap="round" fill="none">
+    <path d="M32 18.5v4"/><path d="M18.4 24.1l2.8 2.8"/><path d="M45.6 24.1l-2.8 2.8"/><path d="M12.8 32.9h3.9"/><path d="M47.3 32.9h3.9"/>
+  </g>
+  <path d="M11 40h42" stroke="url(#ds-line)" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M20 47h24" stroke="#7c8cff" stroke-opacity=".7" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

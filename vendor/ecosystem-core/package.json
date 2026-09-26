@@ -1,0 +1,30 @@
+{
+  "name": "ecosystem-core",
+  "version": "0.1.0",
+  "description": "Shared building blocks for Dayspring and Lantern: AI providers, voices, web lookup, documents, updates, the local app bus and discovery, and the shared look (tokens, sound panel, voice orb, lantern avatar).",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "engines": { "node": ">=22.9" },
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./llm": "./lib/llm.mjs",
+    "./voice": "./lib/voice.mjs",
+    "./voices-defaults": "./shared/voices-defaults.mjs",
+    "./web": "./lib/web.mjs",
+    "./documents": "./lib/documents.mjs",
+    "./updater": "./lib/updater.mjs",
+    "./bus": "./lib/bus.mjs",
+    "./credentials": "./lib/credentials.mjs",
+    "./eco": "./lib/eco.mjs",
+    "./client/*": "./client/*"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "test:demo": "node test/demo.e2e.mjs",
+    "contrast": "node scripts/contrast.mjs",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "optionalDependencies": {},
+  "peerDependenciesMeta": {}
+}

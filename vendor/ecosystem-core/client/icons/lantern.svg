@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Lantern">
+  <!-- Lantern: a lantern with a lit flame. Same 64-unit grid, 14-unit corner and 3.5 stroke as the Dayspring mark. -->
+  <defs>
+    <linearGradient id="ln-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b1e13"/><stop offset="1" stop-color="#120d09"/></linearGradient>
+    <radialGradient id="ln-glow" cx=".5" cy=".6" r=".42"><stop offset="0" stop-color="#ffb547" stop-opacity=".55"/><stop offset="1" stop-color="#ffb547" stop-opacity="0"/></radialGradient>
+    <linearGradient id="ln-flame" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff8a3d"/><stop offset=".55" stop-color="#ffb547"/><stop offset="1" stop-color="#fff1b8"/></linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#ln-bg)"/>
+  <rect width="64" height="64" rx="14" fill="url(#ln-glow)"/>
+  <g stroke="#e3c07a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M25 18.5a7 7 0 0 1 14 0"/>
+    <path d="M21.5 25h21"/>
+    <path d="M24 25c-4.5 6.5-4.5 17.5 0 24h16c4.5-6.5 4.5-17.5 0-24"/>
+    <path d="M21.5 53h21"/>
+  </g>
+  <path d="M32 31.5c3.2 3.6 4.4 6.6 4.4 9a4.4 4.4 0 0 1-8.8 0c0-2.4 1.2-5.4 4.4-9z" fill="url(#ln-flame)"/>
+</svg>

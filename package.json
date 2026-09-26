@@ -1,0 +1,25 @@
+{
+  "name": "lantern",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lantern: a learning platform that runs on your own computer. Courses work offline; a free hosted hub shares courses and keeps progress in sync.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node server/src/index.js",
+    "selftest": "node server/src/index.js --selftest",
+    "demo": "node server/src/seed.js && node --env-file-if-exists=server/.env -e \"process.env.LANTERN_MODE='demo'; await import('./server/src/index.js')\"",
+    "test": "node server/test/test-foundation.mjs && node server/test/test-platform.mjs && node server/test/test-platform2.mjs",
+    "test:e2e": "node server/test/e2e-offer-flow.mjs",
+    "build:pack": "node scripts/build-pack.mjs",
+    "publish:course": "node scripts/publish-course.mjs",
+    "export": "node scripts/export.mjs",
+    "release": "node scripts/release.mjs"
+  },
+  "lantern": {
+    "updateRepo": "juggernautjake/lantern"
+  }
+}

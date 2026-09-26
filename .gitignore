@@ -1,0 +1,14 @@
+# Yours, never shared
+.env
+server/.env
+data/
+server/data/
+*.db
+*.db-wal
+*.db-shm
+
+# Built
+dist/packs/*.lpack
+dist-out/
+node_modules/
+*.log

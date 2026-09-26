@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Template Course</title>
+<style>
+  body { font: 16px/1.55 system-ui, sans-serif; margin: 0; display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; background: #fbf7ef; color: #2a1f14; }
+  nav { background: #f1e8d6; padding: 12px; }
+  nav button { display: block; width: 100%; text-align: left; margin: 2px 0; padding: 6px 8px; border: 0; background: none; border-radius: 6px; cursor: pointer; font: inherit; }
+  nav button[aria-current="page"] { background: #e3cfa6; }
+  nav button.done::after { content: " ✓"; color: #2f7d4f; }
+  main { padding: 24px; max-width: 70ch; }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+  button.act { padding: 8px 14px; border-radius: 8px; border: 1px solid #b08b50; background: #fff; cursor: pointer; }
+  @media (max-width: 640px) { body { grid-template-columns: 1fr; } }
+</style>
+<body>
+<nav id="nav" aria-label="Lessons"></nav>
+<main id="main"></main>
+<script>
+/* A course pack is just pages. This one shows the whole contract in a few
+   lines: keep your state in the storage key named in course.json, in the
+   shape its "progress" map describes, and Lantern does the rest (saving it,
+   syncing it, showing progress, reopening at the right page). */
+(function () {
+  var KEY = 'course-template';
+  var S = { v: 1, lessons: {}, exercises: {}, projects: {}, seconds: 0, lastPage: null };
+  try { var raw = localStorage.getItem(KEY); if (raw) S = Object.assign(S, JSON.parse(raw)); } catch (e) {}
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+  var PAGES = [
+    { id: 't-u1l1', title: 'Welcome', body: '<p>This is a lesson. Read it, then mark it complete.</p>' },
+    { id: 't-u1l2', title: 'Your first exercise', body: '<p>What is 6 × 7?</p><input id="ans" aria-label="Your answer"> <button class="act" id="chk">Check</button> <span id="res"></span>', exercise: 't-u1l2e1' },
+    { id: 't-u1check', title: 'Unit 1 check', body: '<p>A unit check would go here. Pretend you passed.</p>' },
+    { id: 't-u2l1', title: 'Planning a project', body: '<p>Break a big task into small steps.</p>' },
+    { id: 't-proj', title: 'A tiny project', body: '<p>Two milestones:</p><div class="row"><button class="act" data-m="t-proj-m1">Finish step one</button><button class="act" data-m="t-proj-m2">Finish step two</button></div>', project: true },
+  ];
+  var byId = {}; PAGES.forEach(function (p) { byId[p.id] = p; });
+
+  function nav() {
+    var n = document.getElementById('nav'); n.innerHTML = '';
+    PAGES.forEach(function (p) {
+      var b = document.createElement('button');
+      b.textContent = p.title;
+      if (S.lessons[p.id] && S.lessons[p.id].done) b.className = 'done';
+      if (S.lastPage === p.id) b.setAttribute('aria-current', 'page');
+      b.onclick = function () { go(p.id); };
+      n.appendChild(b);
+    });
+  }
+  function go(id) {
+    var p = byId[id] || PAGES[0];
+    S.lastPage = p.id; save();
+    var m = document.getElementById('main');
+    m.innerHTML = '<h1>' + p.title + '</h1>' + p.body;
+    if (!p.project) {
+      var row = document.createElement('div'); row.className = 'row';
+      var done = document.createElement('button'); done.className = 'act done-btn';
+      var isDone = S.lessons[p.id] && S.lessons[p.id].done;
+      done.textContent = isDone ? 'Completed ✓' : 'Mark complete';
+      done.onclick = function () { S.lessons[p.id] = { done: true, at: Date.now() }; save(); go(p.id); };
+      row.appendChild(done); m.appendChild(row);
+    }
+    if (p.exercise) document.getElementById('chk').onclick = function () {
+      var ok = document.getElementById('ans').value.trim() === '42';
+      var e = S.exercises[p.exercise] || { attempts: 0, passed: false, best: 0 };
+      e.attempts++; e.lastAt = Date.now();
+      if (ok && !e.passed) { e.passed = true; e.firstPassAt = Date.now(); }
+      e.best = Math.max(e.best, ok ? 100 : 0);
+      S.exercises[p.exercise] = e; save();
+      document.getElementById('res').textContent = ok ? 'Correct!' : 'Not quite — try again.';
+    };
+    m.querySelectorAll('[data-m]').forEach(function (b) {
+      b.onclick = function () { S.projects[b.dataset.m] = { attempts: 1, passed: true, at: Date.now() }; save(); b.textContent = 'Done ✓'; };
+    });
+    nav();
+  }
+  // Lantern can send the course to a page: { lantern: 'go', id }
+  window.addEventListener('message', function (e) { if (e.source === window.parent && e.data && e.data.lantern === 'go' && byId[e.data.id]) go(e.data.id); });
+  // Time on task, counted up while the page is visible.
+  setInterval(function () { if (document.visibilityState === 'visible') { S.seconds += 30; save(); } }, 30000);
+  go(S.lastPage || PAGES[0].id);
+})();
+</script>
+</body>
+</html>

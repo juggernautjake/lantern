@@ -1,0 +1,29 @@
+{
+  "id": "template",
+  "title": "Template Course",
+  "version": "1.0.0",
+  "description": "A tiny working course to copy when you start a new one: two units, a few lessons, an exercise, a project and a check.",
+  "level": "Everyone",
+  "subject": "Example",
+  "estimatedHours": 1,
+  "minPlatform": "0.1.0",
+  "structure": "structure.json",
+  "storage": { "keys": ["course-template"] },
+  "progress": {
+    "key": "course-template",
+    "stateVersion": 1,
+    "lessons": "lessons",
+    "lessonDone": "done",
+    "exercises": "exercises",
+    "exercisePassed": "passed",
+    "exerciseBest": "best",
+    "exerciseAttempts": "attempts",
+    "milestones": "projects",
+    "milestonePassed": "passed",
+    "seconds": "seconds",
+    "position": "lastPage"
+  },
+  "changelog": [
+    { "version": "1.0.0", "date": "2026-09-25", "notes": "- The first version." }
+  ]
+}
