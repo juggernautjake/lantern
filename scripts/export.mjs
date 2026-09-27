@@ -14,7 +14,7 @@
    .git, node_modules and data are kept between exports.
    =========================================================================== */
 
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_TARGET, report, scan } from './privacy-scan.mjs';
@@ -29,6 +29,8 @@ export const ALLOW = [
   ['server/.env.example', 'server/.env.example'],
   ['server/README.md', 'server/README.md'],
   ['server/test/test-foundation.mjs', 'server/test/test-foundation.mjs'],
+  ['server/test/test-platform.mjs', 'server/test/test-platform.mjs'],
+  ['server/test/test-platform2.mjs', 'server/test/test-platform2.mjs'],
   ['server/test/test-ecosystem.mjs', 'server/test/test-ecosystem.mjs'],
   ['server/test/e2e-offer-flow.mjs', 'server/test/e2e-offer-flow.mjs'],
   ['server/test/test-friends.mjs', 'server/test/test-friends.mjs'],
@@ -60,6 +62,54 @@ export const ALLOW = [
 const NEVER = [/(^|[\\/])\.env$/, /(^|[\\/])data([\\/]|$)/, /\.db(-wal|-shm)?$/, /(^|[\\/])_probe\./, /\.lpack$/, /(^|[\\/])node_modules([\\/]|$)/, /\.log$/];
 const KEEP_TARGET = new Set(['.git', 'node_modules', 'data', 'dist-out']);
 
+/* package.json is copied whole, but this repo's scripts reach into folders the
+   platform repo does not carry — the course kit and the courses themselves. A
+   script that names a file nobody received is worse than no script: it fails
+   for the first person who runs `npm test` on a fresh clone. So each script is
+   read as a chain of `&&` steps, any step naming a missing file is dropped, and
+   a script left with nothing is dropped too. Nothing is renamed by hand here,
+   so a script added later is handled without anyone remembering to. */
+function pruneScripts(t, quiet) {
+  const file = join(t, 'package.json');
+  if (!existsSync(file)) return;
+  const pkg = JSON.parse(readFileSync(file, 'utf8'));
+  const scripts = pkg.scripts || {};
+  const dropped = [];
+
+  // Which file does this step run, if any? `npm run x` defers to script x.
+  const named = (step) => {
+    const run = /(?:^|\s)npm\s+run\s+([A-Za-z0-9:_-]+)/.exec(step);
+    if (run) return { script: run[1] };
+    const node = /(?:^|\s)node\s+(?:--[^\s]+\s+)*([^\s"']+\.(?:mjs|js|cjs))/.exec(step);
+    if (node) return { path: node[1] };
+    return {};
+  };
+
+  // Resolve repeatedly: dropping test:fs must also drop it from the test chain.
+  for (let pass = 0; pass < 8; pass++) {
+    let changed = false;
+    for (const key of Object.keys(scripts)) {
+      const steps = String(scripts[key]).split('&&').map((x) => x.trim()).filter(Boolean);
+      const kept = steps.filter((step) => {
+        const n = named(step);
+        if (n.path) return existsSync(join(t, n.path));
+        if (n.script) return Object.prototype.hasOwnProperty.call(scripts, n.script);
+        return true;
+      });
+      if (kept.length !== steps.length) {
+        changed = true;
+        if (!kept.length) { delete scripts[key]; dropped.push(key); }
+        else scripts[key] = kept.join(' && ');
+      }
+    }
+    if (!changed) break;
+  }
+
+  pkg.scripts = scripts;
+  writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
+  if (!quiet && dropped.length) console.log('  scripts not shipped (their files are private): ' + dropped.join(', '));
+}
+
 export function exportTo(target, opts) {
   const o = opts || {};
   const t = resolve(target || DEFAULT_TARGET);
@@ -73,6 +123,7 @@ export function exportTo(target, opts) {
     if (!existsSync(src)) { if (!o.quiet) console.warn('  (missing, skipped) ' + from); continue; }
     cpSync(src, join(t, to), { recursive: true, filter: (s) => { const ok = filter(s); return ok; } });
   }
+  pruneScripts(t, o.quiet);
   mkdirSync(join(t, 'dist', 'packs'), { recursive: true });
   writeFileSync(join(t, 'dist', 'packs', '.gitkeep'), '');
   const count = (d) => readdirSync(d, { withFileTypes: true }).reduce((a, e) => a + (KEEP_TARGET.has(e.name) ? 0 : e.isDirectory() ? count(join(d, e.name)) : 1), 0);
