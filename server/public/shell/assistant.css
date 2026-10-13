@@ -95,3 +95,31 @@ body[data-dock="bottom"] .as-head { width: 220px; flex-direction: column; }
 .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 6px currentColor; vertical-align: -1px; }
 label.f .row input[type=range] { flex: 1; }
 label.f small { display: block; margin-top: 4px; }
+
+/* ── what Lantern is doing (setLamp → body[data-lantern-mode]) ─────────────
+   listen: bars that follow your voice (--lantern-mic, 0–1)
+   think:  three dots rising in turn
+   speak:  a steady wave */
+.as-statusline { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.as-mode { display: none; align-items: center; gap: 2px; height: 14px; flex: none; }
+.as-mode i { display: block; width: 3px; height: 4px; border-radius: 2px; background: var(--accent, #e8b84a); opacity: .9; }
+body[data-lantern-mode="listen"] .as-mode, body[data-lantern-mode="think"] .as-mode, body[data-lantern-mode="speak"] .as-mode { display: inline-flex; }
+body[data-lantern-mode="listen"] .as-mode i { height: calc(4px + var(--lantern-mic, .25) * 10px); transition: height 80ms linear; animation: as-hear .9s ease-in-out infinite; }
+body[data-lantern-mode="listen"] .as-mode i:nth-child(2) { animation-delay: -.2s; }
+body[data-lantern-mode="listen"] .as-mode i:nth-child(3) { animation-delay: -.4s; }
+body[data-lantern-mode="listen"] .as-mode i:nth-child(4) { animation-delay: -.6s; }
+body[data-lantern-mode="listen"] .as-mode i:nth-child(5) { animation-delay: -.8s; }
+body[data-lantern-mode="think"] .as-mode i { width: 5px; height: 5px; border-radius: 50%; animation: as-think 1.2s ease-in-out infinite; }
+body[data-lantern-mode="think"] .as-mode i:nth-child(2) { animation-delay: .15s; }
+body[data-lantern-mode="think"] .as-mode i:nth-child(3) { animation-delay: .3s; }
+body[data-lantern-mode="think"] .as-mode i:nth-child(n+4) { display: none; }
+body[data-lantern-mode="speak"] .as-mode i { animation: as-speak .7s ease-in-out infinite alternate; }
+body[data-lantern-mode="speak"] .as-mode i:nth-child(2) { animation-delay: .1s; }
+body[data-lantern-mode="speak"] .as-mode i:nth-child(3) { animation-delay: .2s; }
+body[data-lantern-mode="speak"] .as-mode i:nth-child(4) { animation-delay: .3s; }
+body[data-lantern-mode="speak"] .as-mode i:nth-child(5) { animation-delay: .4s; }
+body[data-lantern-mode="listen"] .as-status { color: var(--accent, #e8b84a); }
+@keyframes as-hear { 0%, 100% { transform: scaleY(.7); } 50% { transform: scaleY(1.15); } }
+@keyframes as-think { 0%, 100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
+@keyframes as-speak { from { height: 3px; } to { height: 13px; } }
+@media (prefers-reduced-motion: reduce) { .as-mode i { animation: none !important; } }

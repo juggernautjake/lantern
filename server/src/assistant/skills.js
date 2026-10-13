@@ -119,7 +119,10 @@ export async function handle(text, S, opts) {
     }
     return { reply: 'Run your code with the Check button: the messages under the editor say exactly which check fails. If you are stuck, ask me for a hint.' };
   }
-  if ((m = /^(?:look up|search (?:for|the web for)?|google|what (?:is|are|was|were)|who (?:is|was|were)|tell me about) (.{2,120})$/.exec(q))) {
+  // A quick web look-up stands in for the AI only when there is none. When the
+  // AI failed, a raw search of a whole question ("what is the little l…")
+  // returns junk, so a question that only the AI can answer gets no look-up.
+  if ((m = /^(?:look up|search (?:for|the web for)?|google|what (?:is|are|was|were)|who (?:is|was|were)|tell me about) (.{2,120})$/.exec(q)) && (!o.afterError || /^(look up|search|google)/.test(q)) && (/^(look up|search|google)/.test(q) || m[1].split(/\s+/).length <= 5)) {
     try {
       const r = await resources.generalWeb().search(m[1], { max: 4 });
       if (!r.results.length) return { reply: 'I could not find anything for that. The computer may be offline.' };

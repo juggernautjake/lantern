@@ -27,6 +27,8 @@ import { createSoundPanel } from '/eco/client/sound-panel.js';
 import { createLayout } from '/eco/client/layout-core.js';
 import { pickBrowserVoice } from '/eco/shared/voices-defaults.mjs';
 import { createSpeechQueue } from '/shell/speech-queue.js';
+import { spoken } from '/shell/spoken.js';
+import { createWakeListener, recordRequest } from '/shell/wake.js';
 
 const LS = window.LanternShell;
 const { api, el, toast } = LS;
@@ -106,11 +108,12 @@ function buildPanel(slot) {
   slot.classList.add('as-slot');
   const lampBox = el('div', { class: 'as-lamp', 'data-testid': 'assistant-lamp' });
   const status = el('small', { class: 'as-status', text: 'Ready', 'aria-live': 'polite' });
+  const modeDots = el('span', { class: 'as-mode', 'aria-hidden': 'true' }, [el('i'), el('i'), el('i'), el('i'), el('i')]);
   const talk = el('button', { class: 'as-ico', type: 'button', 'data-testid': 'ptt', title: 'Push to talk: press, then speak', 'aria-label': 'Push to talk' }, '🎙️');
   const stop = el('button', { class: 'as-ico', type: 'button', 'data-testid': 'stop-speaking', title: 'Stop talking (Esc)', 'aria-label': 'Stop talking' }, '■');
   const hide = el('button', { class: 'as-ico', type: 'button', title: 'Hide Lantern', 'aria-label': 'Hide Lantern' }, '⟩');
   talk.addEventListener('click', pushToTalk);
-  stop.addEventListener('click', () => { stopSpeaking(); stopListeningForCommand(); });
+  stop.addEventListener('click', () => { stopSpeaking(); if (A.request) A.request.stop(); });
   hide.addEventListener('click', toggleDock);
   const tabs = el('div', { class: 'as-tabs', role: 'tablist' }, [
     el('button', { type: 'button', role: 'tab', 'data-tab': 'talk', 'aria-selected': 'true', onclick: () => setTab('talk') }, 'Talk'),
@@ -124,7 +127,7 @@ function buildPanel(slot) {
   form.addEventListener('submit', (e) => { e.preventDefault(); const t = input.value.trim(); if (!t) return; input.value = ''; send(t); });
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
   const head = el('div', { class: 'as-head ln-lampglow' }, [lampBox,
-    el('div', { class: 'as-title' }, [el('b', { text: A.prefs.wakeWord || 'Lantern' }), status]),
+    el('div', { class: 'as-title' }, [el('b', { text: A.prefs.wakeWord || 'Lantern' }), el('span', { class: 'as-statusline' }, [modeDots, status])]),
     el('div', { class: 'as-tools' }, [talk, stop, hide])]);
   slot.appendChild(el('div', { class: 'as-panel' }, [head, tabs, log, res, form]));
 
@@ -146,7 +149,17 @@ function setTab(t) {
   $('.as-log').hidden = t !== 'talk'; $('.as-input').hidden = t !== 'talk'; $('.as-res').hidden = t !== 'resources';
 }
 function setStatus(t) { const s = $('.as-status'); if (s) s.textContent = t; }
-function setLamp(state) { if (A.lamp) A.lamp.setState(A.prefs.enabled ? state : 'off'); }
+// What Lantern is doing, shown three ways at once: the lamp's own animation,
+// a small indicator by the status line, and data-lantern-mode on the page.
+//   idle   waiting (and, when the wake word is on, quietly listening for it)
+//   listen hearing a request — the flame follows the microphone's level
+//   think  working on the answer
+//   speak  talking — the flame follows its voice
+function setLamp(state) {
+  const st = A.prefs.enabled ? state : 'off';
+  if (A.lamp) A.lamp.setState(st);
+  document.body.dataset.lanternMode = st;
+}
 
 const narrow = () => !!(window.matchMedia && window.matchMedia('(max-width: 900px)').matches);
 let openHere = false;          // on a phone: opened with the button, this visit
@@ -208,15 +221,15 @@ async function sendNow(text) {
   catch (e) { out = { reply: 'I could not answer just then: ' + e.message, actions: [] }; }
   A.thinking = false;
   const acts = out.actions || [];
-  if (acts.some((a) => a.type === 'stop')) { stopSpeaking(); setLamp(A.listening ? 'listen' : 'idle'); setStatus('Ready'); return out; }
+  if (acts.some((a) => a.type === 'stop')) { stopSpeaking(); setLamp('idle'); setStatus('Ready'); return out; }
   if (acts.some((a) => a.type === 'clear')) { const log = $('.as-log'); if (log) log.innerHTML = ''; }
   const links = acts.filter((a) => a.type === 'links').flatMap((a) => a.items || []);
   const sug = acts.find((a) => a.type === 'suggest');
   const button = sug ? el('button', { class: 'btn', type: 'button', onclick: () => openRef(sug.course, sug.ref) }, 'Open ' + sug.title) : null;
   if (out.reply) addMsg('lantern', out.reply, { links: links.concat((out.citations || []).map((c) => ({ title: c.title, url: c.url }))), button });
   for (const a of acts) runAction(a);
-  setStatus('Ready');
-  if (out.reply && !out.silent) say(out.reply); else setLamp(A.listening ? 'listen' : 'idle');
+  // the voice can take a moment to arrive: still 'thinking' until it speaks
+  if (out.reply && !out.silent) { setStatus('Answering…'); say(out.reply); } else { setLamp('idle'); setStatus('Ready'); }
   return out;
 }
 function runAction(a) {
@@ -243,7 +256,6 @@ function speechQueue() {
       A.speaking = true;
       notifySpeaking(true);
       A.audio.duck(true);
-      pauseRecognition();
       setLamp('speak'); setStatus('Speaking…');
     },
     onEnd: () => {
@@ -251,8 +263,7 @@ function speechQueue() {
       notifySpeaking(false);
       A.audio.duck(false);
       if (A.lamp) { A.lamp.setAnalyser(null); A.lamp.setLevel(0); }
-      setLamp(A.listening ? 'listen' : 'idle'); setStatus('Ready');
-      resumeRecognition();
+      setLamp('idle'); setStatus('Ready');
     },
   });
   return A.speech;
@@ -260,7 +271,7 @@ function speechQueue() {
 /* Say something: queued behind anything already being said. */
 export function say(text) {
   if (!A.prefs.enabled || !A.prefs.speakReplies) return;
-  const t = String(text || '').replace(/```[\s\S]*?```/g, ' (the code is on screen) ').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[*_#`>]/g, '').trim();
+  const t = spoken(text);          // every number, equation, unit and bearing in words
   if (t) speechQueue().say(t);
 }
 /* Stop now: what is playing, and everything queued. */
@@ -270,11 +281,12 @@ export function stopSpeaking() {
   try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) { /* none */ }
   A.paused = false;
   if (A.lamp) { A.lamp.setAnalyser(null); A.lamp.setLevel(0); }
-  setLamp(A.listening ? 'listen' : 'idle');
+  setLamp('idle');
 }
 function notifySpeaking(on) { api('/api/assistant/speaking', { method: 'POST', body: { on } }).catch(() => {}); }
 
 async function speakOne(text, stale) {
+  A.sayingText = text;
   // The server voice (ElevenLabs / OpenAI) when there is one; else the browser's own.
   let blob = null;
   try {
@@ -318,7 +330,9 @@ async function browserSpeak(text, stale) {
   if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
   const voice = await chosenBrowserVoice();
   const rate = Number((A.info.voice && A.info.voice.settings && A.info.voice.settings.rate) || 1);
-  const parts = text.match(/[^.!?…]+[.!?…]+["')\]]*|[^.!?…]+$/g) || [text];
+  // sentence by sentence — a sentence ends at . ! ? followed by a space, never
+  // inside "3.5" (which used to be read as "three … five")
+  const parts = text.split(/(?<=[.!?…]["')\]]*)\s+/).filter((p) => p.trim()) || [text];
   let pulse = null;
   if (A.lamp) { A.lamp.setAnalyser(null); pulse = setInterval(() => A.lamp.setLevel(0.25 + Math.random() * 0.45), 110); }
   try {
@@ -369,61 +383,106 @@ function onEco(ev) {
 async function refreshMic() {
   try { A.info.mic = await api('/api/assistant/mic'); } catch (e) { return; }
   A.micOk = !!(A.info.mic && A.info.mic.lanternMayListen);
-  const want = A.prefs.enabled && A.prefs.wakeOn && A.micOk && !AUTOMATED && !!recognitionClass();
+  const want = A.prefs.enabled && A.prefs.wakeOn && A.micOk && (!AUTOMATED || !!window.__lanternFakeMic) && !!recognitionClass();
   const t = $('[data-testid=ptt]');
   if (t) t.title = A.micOk ? 'Push to talk (or say “' + (A.prefs.wakeWord || 'Lantern') + '”)' : 'Push to talk. Dayspring is listening for its own name right now, so say “Dayspring” there, or press this.';
   if (want && !A.recWanted) startWake();
   if (!want && A.recWanted) stopWake();
+  if (want && A.wake && A.wake.wanted) A.wake.kick();
 }
 const recognitionClass = () => window.SpeechRecognition || window.webkitSpeechRecognition || null;
-function startWake() {
-  const R = recognitionClass();
-  if (!R) return;
-  A.recWanted = true;
-  const rec = new R();
-  rec.continuous = true; rec.interimResults = false; rec.lang = 'en-US';
-  rec.onresult = (e) => {
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (!e.results[i].isFinal) continue;
-      heard(String(e.results[i][0].transcript || '').trim());
-    }
-  };
-  rec.onend = () => { A.listening = false; if (A.recWanted && !A.speaking) setTimeout(() => { try { rec.start(); A.listening = true; } catch (x) { /* already */ } }, 400); };
-  rec.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { A.recWanted = false; setStatus('The microphone is blocked. Allow it in the browser to use “' + (A.prefs.wakeWord || 'Lantern') + '”.'); } };
-  A.rec = rec;
-  try { rec.start(); A.listening = true; } catch (e) { A.listening = false; }
+const wakeName = () => A.prefs.wakeWord || 'Lantern';
+// The wake word: see wake.js for how it keeps listening and what it forgives.
+function wake() {
+  if (A.wake) return A.wake;
+  A.wake = createWakeListener({
+    Recognition: recognitionClass(),
+    wakeWord: wakeName,
+    isSpeaking: () => A.speaking,
+    speakingText: () => A.sayingText || '',
+    onState: (st) => { A.listening = st === 'listening'; if (!A.speaking && !A.request && !A.thinking) { setLamp('idle'); setStatus(readyText()); } },
+    onBlocked: () => setStatus('The microphone is blocked. Allow it in the browser to use “' + wakeName() + '”.'),
+    // the name, heard mid-phrase: light up straight away; if Lantern is talking, it stops to listen
+    onWake: () => { if (A.speaking) stopSpeaking(); setLamp('listen'); setStatus('I heard my name…'); },
+    onCommand: (text) => send(text),
+    onAsk: (done) => askForRequest(done),
+  });
+  return A.wake;
 }
-function stopWake() { A.recWanted = false; if (A.rec) { try { A.rec.abort(); } catch (e) { /* gone */ } } A.rec = null; A.listening = false; }
-function pauseRecognition() { if (A.rec && A.listening) { try { A.rec.abort(); } catch (e) { /* gone */ } A.listening = false; } }
-function resumeRecognition() { if (A.recWanted && A.rec && !A.listening) { try { A.rec.start(); A.listening = true; } catch (e) { /* already */ } } }
-function heard(text) {
-  const w = (A.prefs.wakeWord || 'Lantern').toLowerCase();
-  const re = new RegExp('^(?:(?:hey|ok|okay|hi)[,\\s]+)?' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b[,.!?\\s]*(.*)$', 'i');
-  const m = re.exec(text);
-  if (m) {
-    const rest = m[1].trim();
-    if (rest) { A.awaitingCommand = 0; send(rest); }
-    else { A.awaitingCommand = Date.now(); setLamp('listen'); setStatus('Listening…'); A.audio.testChime(); }
+function readyText() { return A.recWanted && A.listening ? 'Ready — say “' + wakeName() + '”' : 'Ready'; }
+
+/* While a request is being recorded, the flame (and the indicator) rise and
+   fall with the microphone's level, so you can see it is hearing you. A
+   second, read-only look at the microphone; if the browser will not give one,
+   the flame still moves as words arrive. */
+async function micMeter(on) {
+  const m = A.meter;
+  if (!on) {
+    A.meter = null;
+    if (m) { m.stop = true; try { m.stream.getTracks().forEach((t) => t.stop()); } catch (e) { /* gone */ } try { m.ctx.close(); } catch (e) { /* gone */ } }
+    if (A.lamp) A.lamp.setLevel(0);
+    document.body.style.removeProperty('--lantern-mic');
     return;
   }
-  if (A.awaitingCommand && Date.now() - A.awaitingCommand < 8000) { A.awaitingCommand = 0; send(text); }
+  if (m || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    if (!A.request) { stream.getTracks().forEach((t) => t.stop()); return; }
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const an = ctx.createAnalyser(); an.fftSize = 512;
+    ctx.createMediaStreamSource(stream).connect(an);
+    const buf = new Uint8Array(an.fftSize);
+    const meter = { stream, ctx, stop: false };
+    A.meter = meter;
+    const loop = () => {
+      if (meter.stop) return;
+      an.getByteTimeDomainData(buf);
+      let sum = 0; for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+      const level = Math.min(1, Math.sqrt(sum / buf.length) * 7);
+      if (A.lamp) A.lamp.setLevel(level);
+      document.body.style.setProperty('--lantern-mic', level.toFixed(2));
+      requestAnimationFrame(loop);
+    };
+    loop();
+  } catch (e) { /* no second look at the microphone: the words still move the flame */ }
 }
-function stopListeningForCommand() { A.awaitingCommand = 0; }
-function pushToTalk() {
-  const R = recognitionClass();
-  if (!R) { toast('This browser cannot listen. Use Microsoft Edge or Google Chrome, or type instead.'); return; }
-  if (AUTOMATED) { setStatus('Listening is off in test browsers.'); return; }
-  stopSpeaking();
-  pauseRecognition();
-  const rec = new R();
-  rec.lang = 'en-US'; rec.interimResults = true; rec.continuous = false;
+
+function startWake() { A.recWanted = true; wake().start(); }
+function stopWake() { A.recWanted = false; if (A.wake) A.wake.stop(); A.listening = false; }
+document.addEventListener('visibilitychange', () => { if (!document.hidden && A.wake) A.wake.kick(); });
+
+/* The name on its own, or the push-to-talk button: record one request. The
+   chime sounds only when the microphone is really recording, the words show
+   in the box as they are heard, and a request that was not heard is said out
+   loud rather than met with silence. */
+function askForRequest(done, opts) {
+  const o = opts || {};
   const input = $('[data-testid=assistant-input]');
-  setLamp('listen'); setStatus('Listening… speak now');
-  let final = '';
-  rec.onresult = (e) => { let t = ''; for (let i = 0; i < e.results.length; i++) { t += e.results[i][0].transcript; if (e.results[i].isFinal) final = t; } if (input) input.value = t; };
-  rec.onend = () => { setLamp('idle'); setStatus('Ready'); if (input) input.value = ''; resumeRecognition(); if (final.trim()) send(final.trim()); };
-  rec.onerror = (e) => { setStatus(e.error === 'not-allowed' ? 'The microphone is blocked in this browser.' : 'I did not catch that.'); };
-  try { rec.start(); } catch (e) { setStatus('I could not start listening.'); }
+  if (A.request) A.request.stop();
+  setLamp('listen'); setStatus('One moment…');
+  A.request = recordRequest({
+    Recognition: recognitionClass(),
+    onReady: () => { setLamp('listen'); setStatus('Listening… take your time'); if (!o.quiet) A.audio.testChime(); micMeter(true); },
+    onText: (t) => { if (input) input.value = t; if (!A.meter && A.lamp) A.lamp.setLevel(0.6); },
+    onDone: (text, why) => {
+      A.request = null;
+      micMeter(false);
+      if (input) input.value = '';
+      setLamp('idle'); setStatus('Ready');
+      if (done) done();
+      if (text) return send(text);
+      if (why === 'blocked') return setStatus('The microphone is blocked in this browser.');
+      setStatus('I did not hear a request.');
+      say('Sorry, I didn’t catch that. Say “' + wakeName() + '” and try again.');
+    },
+  });
+}
+function pushToTalk() {
+  if (!recognitionClass()) { toast('This browser cannot listen. Use Microsoft Edge or Google Chrome, or type instead.'); return; }
+  if (AUTOMATED && !window.__lanternFakeMic) { setStatus('Listening is off in test browsers.'); return; }
+  stopSpeaking();
+  if (A.wake) A.wake.pause();
+  askForRequest(() => { if (A.wake && A.recWanted) A.wake.resume(); }, { quiet: true });
 }
 
 /* ========================================================= mini player === */

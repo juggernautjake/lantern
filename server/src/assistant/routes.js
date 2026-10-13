@@ -30,6 +30,7 @@ import * as engine from '../platform/sync/engine.js';
 import * as local from '../platform/local.js';
 import * as packs from '../platform/packs.js';
 import { allIds } from '../platform/progress.js';
+import { spoken } from '../../public/shell/spoken.js';
 
 export const PREF_DEFAULTS = {
   enabled: true,
@@ -96,7 +97,7 @@ export function register(r) {
   r.post('/api/assistant/chat', async ({ body }) => ({ body: await chatMod.chat({ text: body && body.text }) }));
 
   r.post('/api/assistant/tts', async ({ body, send }) => {
-    const text = String((body && body.text) || '').slice(0, 2500);
+    const text = spoken(String((body && body.text) || '').slice(0, 4000)).slice(0, 2500);   // the page does this too; twice is harmless
     if (!text.trim()) return { status: 400, body: { error: 'Nothing to say.' } };
     try {
       const buf = await brain.voice().tts(text, { voice: body && body.voice ? String(body.voice) : undefined });

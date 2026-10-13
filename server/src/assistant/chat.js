@@ -60,8 +60,8 @@ export async function chat(spec) {
     remember(text, reply);
     return { reply, actions: S.actions, via: provider, usage: out.usage || null, citations: out.citations || [], codeSent: S.codeSent };
   } catch (e) {
-    const why = e.status === 401 ? 'The AI key was not accepted. Check it in Settings, Assistant.' : e.name === 'TimeoutError' || /timeout|aborted/i.test(e.message) ? 'The AI took too long to answer.' : /fetch failed|ENOTFOUND|ECONNREFUSED|network/i.test(e.message) ? 'I could not reach the AI. The computer may be offline.' : 'The AI had a problem: ' + e.message;
-    const fallback = await skills.handle(text, S, { noAI: true }).catch(() => null);
+    const why = e.status === 401 ? 'The AI key was not accepted: it may have expired or been turned off. Paste a new one in Settings, Assistant.' : e.name === 'TimeoutError' || /timeout|aborted/i.test(e.message) ? 'The AI took too long to answer.' : /fetch failed|ENOTFOUND|ECONNREFUSED|network/i.test(e.message) ? 'I could not reach the AI. The computer may be offline.' : 'The AI had a problem: ' + e.message;
+    const fallback = await skills.handle(text, S, { noAI: true, afterError: true }).catch(() => null);
     return { reply: why + (fallback && fallback.reply ? ' ' + fallback.reply : ''), actions: S.actions.concat((fallback && fallback.actions) || []), via: 'error', error: e.message };
   }
 }

@@ -1,5 +1,14 @@
 # What's new
 
+## 0.1.3
+
+- **Saying "Lantern" works every time.** Lantern now hears its name anywhere in what you say, and forgives the usual mishearings ("lanterns", "lan tern"). Say the name on its own and it records your request on its own session. It chimes only when it is really recording, it waits until you have finished (pauses mid-sentence are fine), and it shows your words as you speak. If it hears nothing, it says so. If the browser stops listening, Lantern starts it again, and a watchdog checks every few seconds. You can also interrupt it by saying its name while it talks.
+- **You can see what Lantern is doing.** While it hears you, the flame and a small indicator move with your voice. While it works on the answer it shows thinking, and while it talks it shows speaking. Waiting for its name looks calm, so you can tell the difference.
+- **Lantern reads math and numbers out in full.** Equations, decimals, powers, roots, units, bearings and stations are turned into words before they're spoken: "x² + √(a² + b²)" becomes "x squared plus the square root of the quantity a squared plus b squared", and "N 45°30'15\" E" becomes "north forty-five degrees, thirty minutes, fifteen seconds east". The browser voice no longer breaks a decimal like 3.5 into "three… five".
+- **Lantern can read anything in a course aloud.** Every symbol, subscript and number is spoken as words: σ, Σ and Δ, subscripts ("sigma sub m"), long decimals ("zero point, four zeros, then eight three three"), large numbers, angles, bearings, stations, units, tables and calculator key names. The test suite checks every piece of text in the FS course.
+- **Math in replies is written plainly**, with the symbols you'd see in a textbook, not LaTeX code.
+- **A rejected AI key says so clearly.** When the key has expired or been turned off, Lantern tells you to paste a new one in Settings → Assistant. It no longer adds unrelated search results.
+
 ## 0.1.2
 
 - **Lantern knows the page you're on.** Courses can now send the reading that's open, so the assistant can teach from it: explain it in its own words, go deeper, work a fresh example and check your understanding. On checks and exams it gets nothing and gives no help with the questions.
