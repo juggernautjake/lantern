@@ -120,7 +120,7 @@ export function register(r) {
 
   r.post('/api/assistant/here', async ({ body }) => {
     const b = body || {};
-    const h = context.setHere({ course: b.course, ref: b.ref, kind: b.kind, title: b.title });
+    const h = context.setHere({ course: b.course, ref: b.ref, kind: b.kind, title: b.title, module: b.module, text: b.text });
     // The owner's "studying now" follows real lessons only (not the course's
     // start page, its settings or the overview): saving progress sets it too.
     const pack = h.course && packs.get(h.course);

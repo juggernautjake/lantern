@@ -1,5 +1,11 @@
 # What's new
 
+## 0.1.2
+
+- **Lantern knows the page you're on.** Courses can now send the reading that's open, so the assistant can teach from it: explain it in its own words, go deeper, work a fresh example and check your understanding. On checks and exams it gets nothing and gives no help with the questions.
+- **Links in Lantern's replies are clickable** and open in a new tab. Bold and `code` show properly too.
+- **Better "find me a video about this".** Readings with general names like "Key concepts" or "Essential formulas" are now searched by their unit and subject, so the results are about the actual topic. Courses can add their own trusted docs and blog sites, and Khan Academy results are checked for relevance, with a link to Khan's own search when nothing fits.
+
 ## 0.1.1
 
 - **Videos pop out.** The ↗ button on the mini player (or "pop it out") pauses the video and opens it in your browser at the same second.

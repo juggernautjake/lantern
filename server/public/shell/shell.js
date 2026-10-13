@@ -93,18 +93,36 @@
   const fmtMin = (m) => { m = Math.round(m || 0); if (m < 60) return m + ' min'; const h = Math.floor(m / 60), r = m % 60; return h + ' h' + (r ? ' ' + r + ' min' : ''); };
   const fmtWhen = (s) => { if (!s) return ''; const d = new Date(typeof s === 'number' ? s : String(s).replace(' ', 'T') + (/Z|\+/.test(String(s)) ? '' : 'Z')); return isNaN(d) ? String(s) : d.toLocaleString(); };
   const ago = (s) => { if (!s) return 'never'; const t = Date.parse(s); if (isNaN(t)) return ''; const m = Math.round((Date.now() - t) / 60000); if (m < 2) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 48) return h + ' h ago'; return Math.round(h / 24) + ' days ago'; };
+  // Inside a line: [title](https://…) and bare https:// links become links that
+  // open in a new tab; **bold** and `code` keep their emphasis. Everything else
+  // stays text, so nothing in a reply can become markup.
+  const INLINE = /\[([^\]\n]{1,300})\]\((https?:\/\/[^\s)]{1,2000})\)|(https?:\/\/[^\s<>()]{1,2000}[^\s<>().,;:!?'"])|\*\*([^*\n]{1,300})\*\*|`([^`\n]{1,300})`/g;
+  function inline(t) {
+    const out = [];
+    const re = new RegExp(INLINE.source, 'g');
+    let last = 0, m;
+    while ((m = re.exec(t))) {
+      if (m.index > last) out.push(t.slice(last, m.index));
+      if (m[2] || m[3]) out.push(el('a', { href: m[2] || m[3], target: '_blank', rel: 'noopener noreferrer', text: m[1] || m[3] }));
+      else if (m[4]) out.push(el('strong', { text: m[4] }));
+      else out.push(el('code', { text: m[5] }));
+      last = re.lastIndex;
+    }
+    if (last < t.length) out.push(t.slice(last));
+    return out;
+  }
   function md(text) {
-    // A small, safe subset: headings, bullets, paragraphs. Everything is text.
+    // A small, safe subset: headings, bullets, paragraphs, links. Everything else is text.
     const box = el('div', { class: 'md' });
     let list = null;
     String(text || '').split(/\r?\n/).forEach((line) => {
       const t = line.trim();
       if (!t) { list = null; return; }
       const h = /^(#{1,3})\s+(.*)$/.exec(t);
-      if (h) { list = null; box.appendChild(el('h' + Math.min(4, h[1].length + 2), { text: h[2] })); return; }
+      if (h) { list = null; box.appendChild(el('h' + Math.min(4, h[1].length + 2), {}, inline(h[2]))); return; }
       const b = /^[-*]\s+(.*)$/.exec(t);
-      if (b) { if (!list) { list = el('ul'); box.appendChild(list); } list.appendChild(el('li', { text: b[1] })); return; }
-      list = null; box.appendChild(el('p', { text: t }));
+      if (b) { if (!list) { list = el('ul'); box.appendChild(list); } list.appendChild(el('li', {}, inline(b[1]))); return; }
+      list = null; box.appendChild(el('p', {}, inline(t)));
     });
     return box;
   }
@@ -639,7 +657,7 @@
     reportHere({ course: id, ref: openRef || null, kind: openRef ? null : 'course', title: null });
     const onMsg = (e) => {
       if (e.source !== frame.contentWindow || !e.data) return;
-      if (e.data.lantern === 'nav') { reportHere({ course: id, ref: String(e.data.id || '') || null, kind: e.data.kind || null, title: e.data.title || null }); return; }
+      if (e.data.lantern === 'nav') { reportHere({ course: id, ref: String(e.data.id || '') || null, kind: e.data.kind || null, title: e.data.title || null, module: e.data.module || null, text: typeof e.data.text === 'string' ? e.data.text.slice(0, 12000) : null }); return; }
       if (e.data.lantern !== 'settings-changed') return;
       api('/api/prefs', { method: 'PUT', body: { editor: e.data.editor, appearance: e.data.appearance } }).catch(() => {});
     };

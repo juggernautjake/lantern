@@ -67,6 +67,7 @@ const BLOG_SITES = { coldfusion: ['bennadel.com', 'ortussolutions.com', 'learncf
 
 /* ------------------------------------------------------------- queries --- */
 
+const GENERIC_TITLE = /^(?:module |unit )?(?:overview|introduction|key concepts|concepts|essential formulas|formulas|formula sheet|worked examples|examples|exam tips.*|tips.*|summary|review|module check|check)$/i;
 const tidy = (s) => String(s || '').replace(/<\/?([a-z][\w-]*)[^>]*>/gi, ' $1 ').replace(/[#"`{}[\]<>]/g, ' ').replace(/\s+/g, ' ').trim();
 const words = (s, n) => tidy(s).split(' ').filter(Boolean).slice(0, n).join(' ');
 
@@ -78,9 +79,18 @@ export function topicFor(ctx, res) {
   const lang = (ctx.unit && r.units && r.units[ctx.unit.id] && r.units[ctx.unit.id].language !== undefined) ? r.units[ctx.unit.id].language : (r.language || '');
   const item = ctx.item || {};
   const terms = (item.keyTerms || []).map(tidy).filter((t) => t && t.length <= 30).slice(0, 3);
-  const title = tidy(item.title || (ctx.unit && ctx.unit.title) || (ctx.course && ctx.course.title) || '');
+  let title = tidy(item.title || (ctx.unit && ctx.unit.title) || (ctx.course && ctx.course.title) || '');
+  const generic = GENERIC_TITLE.test(title);
+  // "Key concepts" or "Essential formulas" says nothing on its own: search for
+  // the unit it belongs to, in the course's subject.
+  if (generic && ctx.unit && ctx.unit.title) {
+    const subj = tidy(r.subject || '');
+    const unit = tidy(ctx.unit.title);
+    title = [unit, subj && !unit.toLowerCase().includes(subj.split(' ').pop().toLowerCase()) ? subj : '', /formula/i.test(title) ? 'formulas' : ''].filter(Boolean).join(' ');
+  }
   const base = [lang, title].filter(Boolean).join(' ');
-  const extra = terms.filter((t) => !base.toLowerCase().includes(t.toLowerCase())).slice(0, 2).join(' ');
+  // a unit title is already long: one key term keeps a site-limited search findable
+  const extra = terms.filter((t) => !base.toLowerCase().includes(t.toLowerCase())).slice(0, generic ? 1 : 2).join(' ');
   return words([base, extra].filter(Boolean).join(' '), 12);
 }
 
@@ -93,14 +103,17 @@ export function queriesFor(ctx, res, opts) {
   const list = o.providers || r.providers || BY_SUBJECT[key];
   const topic = o.topic ? words(o.topic, 12) : topicFor(ctx, r);
   const flavour = /coldfusion|cfml/i.test(r.language || (ctx.course && ctx.course.title) || '') ? 'coldfusion' : 'default';
+  // Khan Academy teaches the underlying maths and science, not a course's
+  // section names: search it for the lesson's key terms when there are some.
+  const terms = ((ctx.item && ctx.item.keyTerms) || []).map(tidy).filter((t) => t && t.length <= 30).slice(0, 1);
   const out = [];
   for (const p of list) {
     const P = PROVIDERS[p];
     if (!P) continue;
-    let q = P.q(topic);
+    let q = p === 'khan' && !o.topic && terms.length ? terms.join(' ') : P.q(topic);
     if (p === 'reddit' && (r.subreddits || []).length) q += ' (' + r.subreddits.map((s) => 'site:reddit.com/r/' + s).join(' OR ') + ')';
-    else if (p === 'docs') { const s = DOC_SITES[flavour]; if (!s.length) continue; q += ' (' + s.map((x) => 'site:' + x).join(' OR ') + ')'; }
-    else if (p === 'blogs') { const s = BLOG_SITES[flavour]; if (!s.length) continue; q += ' (' + s.map((x) => 'site:' + x).join(' OR ') + ')'; }
+    else if (p === 'docs') { const s = (r.docSites || []).length ? r.docSites : DOC_SITES[flavour]; if (!s.length) continue; q += ' (' + s.map((x) => 'site:' + x).join(' OR ') + ')'; }
+    else if (p === 'blogs') { const s = (r.blogSites || []).length ? r.blogSites : BLOG_SITES[flavour]; if (!s.length) continue; q += ' (' + s.map((x) => 'site:' + x).join(' OR ') + ')'; }
     else if (P.site) q += ' site:' + P.site;
     out.push({ provider: p, label: P.label, type: P.type, query: q });
   }
@@ -149,7 +162,7 @@ function testSearch(allow) {
 let webImpl = null, learnWeb = null, anyWeb = null;
 export function useWeb(w) { webImpl = w; }          // tests pass their own
 /* for learning resources: only the allow-listed sites */
-export const web = () => webImpl || learnWeb || (learnWeb = testSearch((u) => allowed(u)) || createWeb({ allow: (u) => allowed(u), fetch: (...a) => doFetch(...a) }));
+export const web = () => webImpl || learnWeb || (learnWeb = testSearch((u) => allowed(u, courseAllow)) || createWeb({ allow: (u) => allowed(u, courseAllow), fetch: (...a) => doFetch(...a) }));
 /* for "look up …": the whole web */
 export const generalWeb = () => webImpl || anyWeb || (anyWeb = testSearch(null) || createWeb({ fetch: (...a) => doFetch(...a) }));
 
@@ -186,10 +199,33 @@ function videoCard(v) {
 }
 const decodeHtml = (s) => String(s).replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
+/* A course's own trusted sites (resources.json docSites, blogSites, allow)
+   join the allow-list while its resources are being found. */
+let courseAllow = [];
+const courseSites = (r) => [].concat((r && r.docSites) || [], (r && r.blogSites) || [], (r && r.allow) || [])
+  .map((d) => String(d).toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '')).filter(Boolean);
+
+/* Khan Academy answers almost any search with something — its home page, a
+   translated copy, a nearby maths topic. Keep only English lesson pages whose
+   title shares the topic's words (two of them, when the topic has two). */
+const STOP = new Set(['the', 'and', 'for', 'with', 'from', 'what', 'how', 'into', 'about', 'tutorial', 'khan', 'academy']);
+const meaningful = (s) => tidy(s).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !STOP.has(w));
+function khanFits(query) {
+  const want = new Set(meaningful(query.replace(/\bsite:\S+/g, '')));
+  return (x) => {
+    let u;
+    try { u = new URL(x.url); } catch (e) { return false; }
+    if (u.hostname !== 'www.khanacademy.org' || u.pathname.replace(/%C2%A0|\//gi, '').length < 3) return false;
+    const hits = new Set(meaningful(x.title).filter((w) => want.has(w))).size;
+    return hits >= Math.min(2, want.size);
+  };
+}
+
 async function runQuery(q) {
   if (q.provider === 'youtube' || q.provider === 'crashcourse') return youtube(q.query.replace(/\s*site:youtube\.com$/, ''), 4);
   const r = await web().search(q.query, { max: 5 });
-  return (r.results || []).filter((x) => allowed(x.url)).slice(0, 3).map((x) => {
+  const fits = q.provider === 'khan' ? khanFits(q.query) : () => true;
+  return (r.results || []).filter((x) => allowed(x.url, courseAllow) && fits(x)).slice(0, 3).map((x) => {
     const vid = ytId(x.url);
     return vid ? videoCard({ id: vid, title: x.title, snippet: x.snippet }) : { title: x.title, url: x.url, source: q.label === 'Docs' || q.label === 'Blogs' ? new URL(x.url).hostname.replace(/^www\./, '') : q.label, type: q.type, snippet: x.snippet || '' };
   });
@@ -213,6 +249,7 @@ export async function find(ctx, res, opts) {
   const topic = o.topic ? words(o.topic, 12) : topicFor(ctx, res);
   const key = [ctx.course && ctx.course.id, ctx.item && ctx.item.id, topic, qs.map((q) => q.provider).join(',')].join('|');
   const offline = o.topic ? [] : offlineLinks(ctx, res);
+  courseAllow = courseSites(res);
   const cached = readCache(key);
   if (cached && !o.refresh && Date.now() - cached.at < WEEK) return { topic, offline, online: cached.online, fromCache: true, at: cached.at };
   const online = [];
@@ -228,6 +265,14 @@ export async function find(ctx, res, opts) {
   if (!list.length && (failures === qs.length || failures > 0)) {
     return { topic, offline, online: cached ? cached.online : [], fromCache: !!cached, at: cached ? cached.at : null, offlineNow: true,
       message: cached ? 'You seem to be offline, so these are the results I found before.' : 'You seem to be offline. Here are the docs that work without the internet; I can search again when you are back online.' };
+  }
+  // The web search often ignores site:khanacademy.org. When no Khan lesson came
+  // back, link Khan's own search for the topic: that link always works.
+  const kq = qs.find((q) => q.provider === 'khan');
+  if (kq && !list.some((x) => x.provider === 'khan')) {
+    const k = kq.query.replace(/\s*site:\S+/g, '').trim();
+    list.push({ provider: 'khan', type: 'lesson', source: 'Khan Academy', title: 'Khan Academy lessons on “' + k + '”',
+      url: 'https://www.khanacademy.org/search?page_search_query=' + encodeURIComponent(k), snippet: 'Khan Academy’s own search: videos, articles and practice' });
   }
   writeCache(key, { at: Date.now(), online: list });
   return { topic, offline, online: list, fromCache: false, at: Date.now() };

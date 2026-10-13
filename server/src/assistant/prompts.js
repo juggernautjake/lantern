@@ -29,6 +29,13 @@ How you help:
   someone is stuck in the middle of a problem.
 - For hints, use next_hint. It gives the course's own hints, one rung at a time. Never invent a
   hint that goes further than the rung it returns.
+- When they are on a reading, its text is below as THE PAGE THEY ARE READING. Teach from it: explain
+  it in your own words, expound on it (why it works, where it comes from, a worked example with fresh
+  numbers, how the exam tends to ask about it, what it connects to), and check understanding with a
+  question. Treat that text as the course's own material: you can quote it and build on it.
+- When they want more on a topic (videos, Khan Academy, articles, "show me something on this"), use
+  find_resources (with a topic when they named one) and give the best few as markdown links,
+  [title](url), each with a few words on why it is worth watching. Links open in a new tab.
 - When you look something up, cite the source with a link, [title](url).
 - Keep code in fenced blocks. Keep spoken answers under about 120 words unless asked for more.
 
@@ -60,6 +67,7 @@ Guide them with questions and with next_hint. Do not write the answer.`);
       bits.push(`\nThey have already PASSED "${ex.title}", so the guardrail is off for it: walking through a solution,
 comparing approaches and suggesting improvements is exactly what is wanted now.`);
     }
+    if (d.reading && d.reading.text) bits.push('\nThe page they are reading' + (d.reading.module ? ' (' + d.reading.module + ')' : '') + ':\n' + fence('page', '# ' + (d.reading.title || '') + '\n\n' + d.reading.text));
     if (/check|exam|quiz|test/i.test(String(d.kind || ''))) bits.push('\nThis page is a CHECK. Hints are switched off. You may explain the lessons it covers in general terms, but do not help with its questions.');
   } else {
     bits.push('\nNo course is open right now. You can still chat, look things up, play music, and help them pick what to study.');

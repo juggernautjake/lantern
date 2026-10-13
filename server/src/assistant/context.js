@@ -26,13 +26,23 @@ import { learningContext } from '../platform/routes.js';
 
 /* ---------------------------------------------------------------- where --- */
 
-/* The page open right now, as the shell last reported it: { course, ref, kind, title }. */
-let here = { course: null, ref: null, kind: null, title: null, at: 0 };
+/* The page open right now, as the shell last reported it: { course, ref, kind,
+   title, module, text }. text is the reading on the page, sent only by a
+   course for a reading page (never for a check, an exam or an exercise). */
+let here = { course: null, ref: null, kind: null, title: null, module: null, text: null, at: 0 };
+const cap = (s, n) => (typeof s === 'string' && s.trim() ? s.slice(0, n) : null);
 export function setHere(h) {
-  here = { course: h.course || null, ref: h.ref || null, kind: h.kind || null, title: h.title || null, at: Date.now() };
+  const kind = h.kind || null;
+  const text = /check|exam|quiz|test|exercise/i.test(String(kind || '')) ? null : cap(h.text, 12000);
+  here = { course: h.course || null, ref: h.ref || null, kind, title: h.title || null, module: cap(h.module, 200), text, at: Date.now() };
   return here;
 }
 export const where = () => Object.assign({}, here);
+/* The reading open now, when the course sent it: { title, module, text } or null. */
+export function reading(courseId) {
+  if (!here.text || (courseId && here.course !== courseId)) return null;
+  return { title: here.title, module: here.module, text: here.text };
+}
 
 /* The course to talk about: the one open, else the last one studied, else the only one. */
 export function currentPack(courseId) {
@@ -157,7 +167,8 @@ export function describe(uid, courseId, ref) {
     kind: (here.course === pack.id && here.kind) || (lc.item && lc.item.kind) || null,
     exercise: item ? { id: item.id, kind: item.kind, title: item.title, prompt: item.prompt || '', passed: item.passed, attempts: item.attempts, hintsTaken: hintsTaken(uid, pack, item), hintsTotal: (item.hints || []).length } : null,
     progress: { percent: ov.percent, finished: ov.finished, count: ov.count, lessons: ov.lessons, current: ov.current || null, next: ov.next || null, continue: ov.continue || null, minutesLeft: ov.minutesLeft },
-    where: where(),
+    reading: !ref || ref === here.ref ? reading(pack.id) : null,
+    where: Object.assign(where(), { text: undefined }),
   };
 }
 
