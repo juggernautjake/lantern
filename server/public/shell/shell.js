@@ -657,7 +657,15 @@
     reportHere({ course: id, ref: openRef || null, kind: openRef ? null : 'course', title: null });
     const onMsg = (e) => {
       if (e.source !== frame.contentWindow || !e.data) return;
-      if (e.data.lantern === 'nav') { reportHere({ course: id, ref: String(e.data.id || '') || null, kind: e.data.kind || null, title: e.data.title || null, module: e.data.module || null, text: typeof e.data.text === 'string' ? e.data.text.slice(0, 12000) : null }); return; }
+      if (e.data.lantern === 'nav') {
+        // Moving inside the course: the address stops naming the page it was
+        // opened at, so a refresh comes back to the page you are on (the course
+        // remembers it), not the one you came in by — a quiz half done included.
+        const here = String(e.data.id || '');
+        if (here && /[?&]open=/.test(location.hash) && route().open !== here) {
+          try { history.replaceState(history.state, '', '#/learn/' + encodeURIComponent(id)); } catch (err) { /* kept as it was */ }
+        }
+        reportHere({ course: id, ref: String(e.data.id || '') || null, kind: e.data.kind || null, title: e.data.title || null, module: e.data.module || null, text: typeof e.data.text === 'string' ? e.data.text.slice(0, 12000) : null }); return; }
       if (e.data.lantern !== 'settings-changed') return;
       api('/api/prefs', { method: 'PUT', body: { editor: e.data.editor, appearance: e.data.appearance } }).catch(() => {});
     };

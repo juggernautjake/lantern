@@ -1,5 +1,10 @@
 # What's new
 
+## 0.1.4
+
+- **A refresh comes back to the page you were on.** Refreshing Lantern while in a course used to reopen the page you first went in by, even after you had moved on. It now returns to the page you were on, a half-done quiz included.
+- **FS Exam Prep 1.0.3: module checks keep your place.** Leave, refresh or close Lantern partway through a check, and you pick up on the same question with your answers so far. Each check opens on a Start button, can be restarted with new questions at any time, and keeps an attempt history: every finished run with its date, score and result, and every question marked right or wrong with your answer and the working.
+
 ## 0.1.3
 
 - **Saying "Lantern" works every time.** Lantern now hears its name anywhere in what you say, and forgives the usual mishearings ("lanterns", "lan tern"). Say the name on its own and it records your request on its own session. It chimes only when it is really recording, it waits until you have finished (pauses mid-sentence are fine), and it shows your words as you speak. If it hears nothing, it says so. If the browser stops listening, Lantern starts it again, and a watchdog checks every few seconds. You can also interrupt it by saying its name while it talks.
