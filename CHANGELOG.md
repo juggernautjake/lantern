@@ -1,5 +1,10 @@
 # What's new
 
+## 0.1.6
+
+- **The voice reads calculator keys.** Arrow keys are said as presses ("math, right, right, six"), the HP shift keys as "left shift" and "right shift", and the empty boxes on template keys as "box".
+- **FS Exam Prep 1.1.1:** a second, independent review of the whole course: corrected answer keys, readings and generated problems. See the course's own notes.
+
 ## 0.1.5
 
 - **Maths reads as maths, and the voice says it in words.** Powers are raised and subscripts lowered everywhere a course shows maths, including formula cards, flashcards, the glossary and answer units. The voice now also says frequencies, times, fractions of an inch, PLSS aliquot parts ("the northeast quarter of the southwest quarter") and per-degree rates in full.

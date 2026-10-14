@@ -84,6 +84,9 @@ const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅':
   'ₘ': 'm', 'ₚ': 'p', 'ₛ': 's', 'ₜ': 't', 'ₕ': 'h', 'ₗ': 'l', 'ᵣ': 'r', 'ᵤ': 'u', 'ᵥ': 'v', '₋': '-', '₊': '+', '₌': '=', '₍': '(', '₎': ')' };
 // What is left once the maths is words: arrows, marks and signs a voice would skip or spell.
 const MARKS = [
+  // a calculator's arrow keys, standing alone, are presses: "math, right, right, one"
+  [/◄►/g, ' to '], [/(^|[\s`[(])[►▶](?=$|[\s`\])])/g, '$1 right, '], [/(^|[\s`[(])[◄◀](?=$|[\s`\])])/g, '$1 left, '],
+  [/▲/g, ' up '], [/▼/g, ' down '],
   [/[▸►▶]/g, ' to '], [/[◂◄◀]/g, ' from '], [/↔/g, ' to and from '], [/⇄/g, ' swap '], [/[↑⇑]/g, ' up '], [/[↓⇓]/g, ' down '],
   [/[✓✔☑]/g, ' check. '], [/[✗✘]/g, ' no. '], [/⚠️?/g, ' Warning: '], [/§/g, ' section '], [/¶/g, ' paragraph '],
   [/[⟂⊥]/g, ' perpendicular to '], [/ℓ/g, ' ell '], [/[•◦▪]/g, ', '], [/[＋]/g, '+'], [/[－]/g, '-'], [/µm|μm/g, ' micrometers'], [/[µμ]/g, ' mu '],
@@ -218,6 +221,8 @@ function once(input) {
   s = s.replace(/⁄/g, '/');
   // the empty boxes printed on template keys (1/□, ×10■): "box"
   s = s.replace(/[□■]/g, ' box ');
+  // the HP 33s / 35s shift keys
+  s = s.replace(/↰/g, ' left shift ').replace(/↱/g, ' right shift ');
   // 10 in = 25.4 mm, 33⅓ in: "in" is inches only where it cannot be the word "in"
   s = s.replace(/(\d[½⅓⅔¼¾⅛⅜⅝⅞]?)\s?in\b(?=\s*(?:[=,;:)×+\-\/]|\.(?!\d)|$))/g, '$1 inches');
   // PLSS aliquot parts: NE¼ → the northeast quarter, N½ → the north half
