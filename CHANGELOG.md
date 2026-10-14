@@ -1,5 +1,10 @@
 # What's new
 
+## 0.1.5
+
+- **Maths reads as maths, and the voice says it in words.** Powers are raised and subscripts lowered everywhere a course shows maths, including formula cards, flashcards, the glossary and answer units. The voice now also says frequencies, times, fractions of an inch, PLSS aliquot parts ("the northeast quarter of the southwest quarter") and per-degree rates in full.
+- **FS Exam Prep 1.1.0:** every question taught by its module, every answer worked in full with calculator keys for all ten approved calculators, a complete searchable reference sheet (press R), and many corrections. See the course's own notes.
+
 ## 0.1.4
 
 - **A refresh comes back to the page you were on.** Refreshing Lantern while in a course used to reopen the page you first went in by, even after you had moved on. It now returns to the page you were on, a half-done quiz included.

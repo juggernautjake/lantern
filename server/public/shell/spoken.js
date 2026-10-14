@@ -79,7 +79,7 @@ function year(y) {
 const GREEK = { α: 'alpha', β: 'beta', γ: 'gamma', δ: 'delta', ε: 'epsilon', ζ: 'zeta', η: 'eta', θ: 'theta', ι: 'iota', κ: 'kappa', λ: 'lambda', μ: 'mu', ν: 'nu', ξ: 'xi', π: 'pi', ρ: 'rho', σ: 'sigma', ς: 'sigma', τ: 'tau', υ: 'upsilon', φ: 'phi', ϕ: 'phi', χ: 'chi', ψ: 'psi', ω: 'omega',
   Γ: 'capital gamma', Δ: 'delta', '∆': 'delta', Θ: 'capital theta', Λ: 'capital lambda', Π: 'capital pi', Σ: 'the sum of', Φ: 'capital phi', Ψ: 'capital psi', Ω: 'omega' };
 const LATEX_GREEK = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta', 'theta', 'vartheta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'pi', 'rho', 'sigma', 'tau', 'upsilon', 'phi', 'varphi', 'chi', 'psi', 'omega', 'Gamma', 'Delta', 'Theta', 'Lambda', 'Pi', 'Sigma', 'Phi', 'Psi', 'Omega'];
-const SUP = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁻': '-', '⁺': '+', 'ⁿ': 'n', 'ⁱ': 'i', 'ˣ': 'x' };
+const SUP = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁻': '-', '⁺': '+', 'ᵃ': 'a', 'ᵇ': 'b', 'ᶜ': 'c', 'ᵈ': 'd', 'ᵉ': 'e', 'ᶠ': 'f', 'ᵍ': 'g', 'ʰ': 'h', 'ⁱ': 'i', 'ʲ': 'j', 'ᵏ': 'k', 'ˡ': 'l', 'ᵐ': 'm', 'ⁿ': 'n', 'ᵒ': 'o', 'ᵖ': 'p', 'ʳ': 'q', 'ˢ': 'r', 'ᵗ': 's', 'ᵘ': 't', 'ᵛ': 'u', 'ʷ': 'v', 'ˣ': 'w', 'ʸ': 'x', 'ᶻ': 'y' };
 const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9', 'ₙ': 'n', 'ᵢ': 'i', 'ⱼ': 'j', 'ₖ': 'k', 'ₓ': 'x', 'ₐ': 'a', 'ₑ': 'e', 'ₒ': 'o',
   'ₘ': 'm', 'ₚ': 'p', 'ₛ': 's', 'ₜ': 't', 'ₕ': 'h', 'ₗ': 'l', 'ᵣ': 'r', 'ᵤ': 'u', 'ᵥ': 'v', '₋': '-', '₊': '+', '₌': '=', '₍': '(', '₎': ')' };
 // What is left once the maths is words: arrows, marks and signs a voice would skip or spell.
@@ -105,6 +105,9 @@ const SYMBOLS = [
 
 /* Units, said in full after a number (singular when the number is one). */
 const UNITS = [
+  ['GHz', 'gigahertz', 'gigahertz'], ['MHz', 'megahertz', 'megahertz'], ['kHz', 'kilohertz', 'kilohertz'], ['Hz', 'hertz', 'hertz'],
+  ['ns', 'nanosecond', 'nanoseconds'], ['µs|μs', 'microsecond', 'microseconds'], ['ms', 'millisecond', 'milliseconds'],
+  ['µm|μm', 'micrometer', 'micrometers'], ['psi', 'pound per square inch', 'pounds per square inch'],
   ['sq\\.? ?ft|ft\\^2|ft2', 'square foot', 'square feet'], ['sq\\.? ?mi|mi\\^2', 'square mile', 'square miles'], ['sq\\.? ?yd|yd\\^2', 'square yard', 'square yards'],
   ['m\\^2|sq\\.? ?m', 'square meter', 'square meters'], ['km\\^2|sq\\.? ?km', 'square kilometer', 'square kilometers'],
   ['ft\\^3|cu\\.? ?ft', 'cubic foot', 'cubic feet'], ['yd\\^3|cu\\.? ?yd', 'cubic yard', 'cubic yards'], ['m\\^3', 'cubic meter', 'cubic meters'],
@@ -203,8 +206,27 @@ function once(input) {
 
   // --- Unicode forms → one plain form ---
   s = s.replace(/[   ]/g, ' ').replace(/−|–(?=\s*\d)(?<=\s–)/g, '-');
+  // 1³⁄₁₆ — a whole number and a fraction set with the fraction slash
+  const SUPD = { '⁰': 0, '¹': 1, '²': 2, '³': 3, '⁴': 4, '⁵': 5, '⁶': 6, '⁷': 7, '⁸': 8, '⁹': 9 };
+  const SUBD = { '₀': 0, '₁': 1, '₂': 2, '₃': 3, '₄': 4, '₅': 5, '₆': 6, '₇': 7, '₈': 8, '₉': 9 };
+  s = s.replace(/(\d+)?\s?([⁰¹²³⁴⁵⁶⁷⁸⁹]+)⁄([₀₁₂₃₄₅₆₇₈₉]+)(\s?(?:in|ft)\b)?/g, (m, w, a, b, u) => u ? m.slice(0, -u.length) + (/in/.test(u) ? ' inches' : ' feet') : m);
+  s = s.replace(/(\d+)?\s?([⁰¹²³⁴⁵⁶⁷⁸⁹]+)⁄([₀₁₂₃₄₅₆₇₈₉]+)/g, (_, w, a, b) => {
+    const num = Number(a.split('').map((c) => SUPD[c]).join('')), den = Number(b.split('').map((c) => SUBD[c]).join(''));
+    const part = den === 2 ? (num === 1 ? 'half' : 'halves') : den === 4 ? (num === 1 ? 'quarter' : 'quarters') : ordinal(String(den)) + (num === 1 ? '' : 's');
+    return (w ? w + ' and ' : '') + cardinal(String(num)) + ' ' + part;
+  });
+  s = s.replace(/⁄/g, '/');
+  // the empty boxes printed on template keys (1/□, ×10■): "box"
+  s = s.replace(/[□■]/g, ' box ');
+  // 10 in = 25.4 mm, 33⅓ in: "in" is inches only where it cannot be the word "in"
+  s = s.replace(/(\d[½⅓⅔¼¾⅛⅜⅝⅞]?)\s?in\b(?=\s*(?:[=,;:)×+\-\/]|\.(?!\d)|$))/g, '$1 inches');
+  // PLSS aliquot parts: NE¼ → the northeast quarter, N½ → the north half
+  const QUARTER = { NE: 'northeast', NW: 'northwest', SE: 'southeast', SW: 'southwest', N: 'north', S: 'south', E: 'east', W: 'west' };
+  s = s.replace(/\b(NE|NW|SE|SW)\s?¼/g, (_, q) => QUARTER[q] + ' quarter').replace(/\b([NSEW])\s?½/g, (_, q) => QUARTER[q] + ' half');
+  // 33⅓ → thirty-three and one third
+  s = s.replace(/(\d)([½⅓⅔¼¾⅛⅜⅝⅞])/g, (_, d, c) => d + ' and' + FRACTIONS[c]);
   s = s.replace(/[½⅓⅔¼¾⅛⅜⅝⅞]/g, (c) => FRACTIONS[c]);
-  s = s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺ⁿⁱˣ]+/g, (m) => { const x = m.split('').map((c) => SUP[c]).join(''); return '^' + (x.length > 1 && !/^-?\d+$/.test(x) ? '(' + x + ')' : x); });
+  s = s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻ]+/g, (m) => { const x = m.split('').map((c) => SUP[c]).join(''); return '^' + (x.length > 1 && !/^-?\d+$/.test(x) ? '(' + x + ')' : x); });
   s = s.replace(/[₀₁₂₃₄₅₆₇₈₉ₙᵢⱼₖₓₐₑₒₘₚₛₜₕₗᵣᵤᵥ₋₊₌₍₎]+/g, (m) => { const x = m.split('').map((c) => SUB[c]).join(''); return '_' + (/[-+=]/.test(x) ? '(' + x + ')' : x); });
   s = s.replace(/([A-Za-z])̄/g, '$1 bar').replace(/([A-Za-z])̂/g, '$1 hat').replace(/([A-Za-z])̇/g, '$1 dot');
   s = s.replace(/ȳ/g, 'y bar').replace(/ŷ/g, 'y hat').replace(/x̂/g, 'x hat');
@@ -218,6 +240,7 @@ function once(input) {
   // --- surveying: bearings, angles, stations ---
   s = s.replace(/\b([NS])\s?(\d{1,3}(?:\.\d+)?\s?°(?:\s?\d{1,2}(?:\.\d+)?\s?['′])?(?:\s?\d{1,2}(?:\.\d+)?\s?(?:"|″|''))?)\s?([EW])\b/g,
     (_, ns, ang, ew) => (ns === 'N' ? 'north ' : 'south ') + ang + ' ' + (ew === 'E' ? 'east' : 'west'));
+  s = s.replace(/\/\s?°\s?([FC])\b/g, (_, u) => ' per degree ' + (u === 'F' ? 'Fahrenheit' : 'Celsius'));
   s = s.replace(/(\d)\s?°\s?([FC])\b/g, (_, d, u) => d + (u === 'F' ? ' degrees Fahrenheit' : ' degrees Celsius'));
   s = s.replace(/(\d[\d,]*(?:\.\d+)?)\s?°(?:\s?(\d+(?:\.\d+)?)\s?['′])?(?:\s?(\d+(?:\.\d+)?)\s?(?:"|″|''))?/g,
     (_, d, m, sec) => d + (d === '1' ? ' degree' : ' degrees') + (m ? ', ' + m + (m === '1' ? ' minute' : ' minutes') : '') + (sec ? ', ' + sec + (sec === '1' ? ' second' : ' seconds') : ''));
