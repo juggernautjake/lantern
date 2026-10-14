@@ -666,6 +666,21 @@
           try { history.replaceState(history.state, '', '#/learn/' + encodeURIComponent(id)); } catch (err) { /* kept as it was */ }
         }
         reportHere({ course: id, ref: String(e.data.id || '') || null, kind: e.data.kind || null, title: e.data.title || null, module: e.data.module || null, text: typeof e.data.text === 'string' ? e.data.text.slice(0, 12000) : null }); return; }
+      if (e.data.lantern === 'results' && e.data.report && typeof e.data.report === 'object') {
+        // A quiz ended: Lantern reviews it, and the review goes back to the page.
+        const report = e.data.report;
+        const back = (reply) => { try { frame.contentWindow.postMessage(Object.assign({ lantern: 'review', id: report.id }, reply || {}), location.origin); } catch (err) { /* closed */ } };
+        const A = window.LanternAssistant;
+        const run = A && A.reviewResults ? A.reviewResults(id, report) : api('/api/assistant/review', { method: 'POST', body: { course: id, report } });
+        Promise.resolve(run).then((r) => back(r ? { text: r.text, videos: r.videos || [], via: r.via } : null)).catch(() => back(null));
+        return;
+      }
+      if (e.data.lantern === 'play' && Array.isArray(e.data.queue) && window.LanternAssistant) {
+        const q = e.data.queue.filter((v) => v && /^[\w-]{11}$/.test(String(v.videoId || ''))).slice(0, 20)
+          .map((v) => ({ videoId: String(v.videoId), title: String(v.title || '').slice(0, 200), source: String(v.source || '').slice(0, 80), thumbnail: 'https://i.ytimg.com/vi/' + v.videoId + '/hqdefault.jpg' }));
+        if (q.length) window.LanternAssistant.play(q, Math.max(0, Math.min(q.length - 1, Number(e.data.index) || 0)), 'video');
+        return;
+      }
       if (e.data.lantern !== 'settings-changed') return;
       api('/api/prefs', { method: 'PUT', body: { editor: e.data.editor, appearance: e.data.appearance } }).catch(() => {});
     };
@@ -1025,6 +1040,12 @@
     hideAssistant() { $('#assistant-slot').hidden = true; },
     // A mini player (music, video) docked bottom-left.
     registerMedia(renderFn) { const slot = $('#media-slot'); slot.innerHTML = ''; renderFn(slot); },
+    // A message for the course open in the player (the assistant writing a note): false when that course is not open.
+    toCourse(courseId, msg) {
+      const p = S.playing;
+      if (!p || (courseId && p.id !== courseId) || !p.frame.contentWindow) return false;
+      try { p.frame.contentWindow.postMessage(msg, location.origin); return true; } catch (e) { return false; }
+    },
     // What the person is studying right now: course, unit, lesson, objectives, key terms.
     // A page of its own (#/<name>): render(main, route). friends.js adds #/friends.
     registerPage(name, renderFn) { pages[name] = renderFn; if (route().name === name) render(); },

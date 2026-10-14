@@ -26,6 +26,8 @@ export const DEFS = {
   find_resources: { description: 'Free videos, articles, docs and discussions about the current lesson (or a topic), from YouTube, Crash Course, Khan Academy, Codecademy, freeCodeCamp, MDN, Wikipedia, Reddit and the course\'s docs. Shows them on screen as cards.', input_schema: obj({ topic: { type: 'string', description: 'optional: a topic instead of the current lesson' } }) },
   play_video: { description: 'Search YouTube and play the best match in the app\'s mini player (music or a video). query: what to play, e.g. "lofi study music" or "cfqueryparam tutorial".', input_schema: obj({ query: { type: 'string' } }, ['query']) },
   look_up: { description: 'Search the web and return the top results (title, link, snippet). Use for facts and current information.', input_schema: obj({ query: { type: 'string' } }, ['query']) },
+  read_notes: { description: 'The learner\'s own notes in this course, in full. Use when they mention their notes, ask what they wrote, want to be quizzed on them or reviewed, or ask about something they may have written down. With no query, the most recently edited notes; with a query, the notes whose name or text mention it; with a title, that note.', input_schema: obj({ query: { type: 'string', description: 'optional: words to look for' }, title: { type: 'string', description: 'optional: the name of one note' } }) },
+  save_note: { description: 'Write something into the learner\'s notes in the course that is open. ONLY when they ask you to write, note, jot or save something down (or agree when you offer). mode "append" (the default) adds to the note with that title, making it if needed; "new" starts a separate note. Write it in their voice, short and plain: headings with #, lists with -, maths in plain symbols.', input_schema: obj({ title: { type: 'string' }, text: { type: 'string' }, mode: { type: 'string', enum: ['append', 'new'] } }, ['title', 'text']) },
   media_control: { description: 'Control the app\'s player: pause, resume, next, previous, stop, louder, quieter, popout (open the video in their own browser at the same second).', input_schema: obj({ action: { type: 'string', enum: ['pause', 'resume', 'next', 'previous', 'stop', 'louder', 'quieter', 'popout'] } }, ['action']) },
 };
 
@@ -87,6 +89,34 @@ export async function dispatch(name, input, session) {
       case 'look_up': {
         const r = await resources.generalWeb().search(String(inp.query || ''), { max: 5 });
         return ok({ query: r.query, results: r.results.map((x) => ({ title: x.title, url: x.url, snippet: x.snippet })) });
+      }
+      case 'read_notes': {
+        const pack = context.currentPack();
+        if (!pack) return ok({ notes: [], message: 'No course is open.' });
+        const all = context.notesOf(S.uid, pack);
+        if (!all.length) return ok({ notes: [], message: 'They have not written any notes in ' + pack.title + ' yet.' });
+        const title = String(inp.title || '').trim().toLowerCase();
+        const words = String(inp.query || '').toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+        let hits = title ? all.filter((n) => n.title.toLowerCase() === title || n.title.toLowerCase().includes(title)) : all;
+        if (words.length) hits = hits.filter((n) => { const h = (n.title + ' ' + n.body).toLowerCase(); return words.every((w) => h.includes(w)); });
+        let budget = 15000;
+        const notes = hits.slice(0, 8).map((n) => {
+          const body = n.body.slice(0, Math.max(400, budget));
+          budget -= body.length;
+          return { title: n.title, edited: n.updated ? new Date(n.updated).toISOString().slice(0, 10) : null, page: n.page, text: body + (body.length < n.body.length ? '…(cut short)' : '') };
+        });
+        return ok({ notes, total: all.length, matched: hits.length });
+      }
+      case 'save_note': {
+        const pack = context.currentPack();
+        const w = context.where();
+        if (!pack || w.course !== pack.id) return err('The course is not open in the app, so there is nowhere to write the note. Ask them to open the course first.');
+        if (context.notesIndex(S.uid, pack) === null) return err(pack.title + ' has no notes panel, so a note cannot be saved there. Offer to say it again instead, or suggest they copy it somewhere.');
+        const text = String(inp.text || '').trim().slice(0, 20000);
+        if (!text) return err('There is nothing to write.');
+        const title = String(inp.title || 'From Lantern').trim().slice(0, 120) || 'From Lantern';
+        S.actions.push({ type: 'note', course: pack.id, title, text, mode: inp.mode === 'new' ? 'new' : 'append' });
+        return ok({ saved: true, title, mode: inp.mode === 'new' ? 'new' : 'append', shown: 'The note opens in the Notes panel.' });
       }
       case 'media_control': {
         S.actions.push({ type: 'media', action: inp.action });

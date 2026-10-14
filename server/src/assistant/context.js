@@ -23,6 +23,7 @@ import * as progress from '../platform/progress.js';
 import * as engine from '../platform/sync/engine.js';
 import * as settings from '../platform/settings.js';
 import { learningContext } from '../platform/routes.js';
+import { summary as quizSummary } from './review.js';
 
 /* ---------------------------------------------------------------- where --- */
 
@@ -79,6 +80,40 @@ export function packState(uid, pack) {
     const raw = st.keys && st.keys[m.key];
     return raw ? JSON.parse(raw) : {};
   } catch (e) { return {}; }
+}
+
+/* The learner's own notes in a course (app/course/notes.js): any storage key
+   the pack lists that ends in "-notes". Newest first. Their words, not the
+   course's, so they are data like everything else here. */
+export function notesOf(uid, pack) {
+  if (!pack) return [];
+  const keys = ((pack.manifest.storage && pack.manifest.storage.keys) || []).filter((k) => /-notes$/.test(k));
+  if (!keys.length) return [];
+  let st = {};
+  try { st = progress.stateForPlayer(uid, pack, {}).keys || {}; } catch (e) { return []; }
+  const out = [];
+  for (const k of keys) {
+    let s = null;
+    try { s = st[k] ? JSON.parse(st[k]) : null; } catch (e) { s = null; }
+    const notes = s && s.notes && typeof s.notes === 'object' ? Object.values(s.notes) : [];
+    for (const n of notes) {
+      if (!n || typeof n !== 'object') continue;
+      out.push({ id: String(n.id || ''), title: String(n.title || 'Untitled note').slice(0, 120), body: String(n.body || '').slice(0, 100000),
+        updated: Number(n.updated) || 0, created: Number(n.created) || 0, page: n.refTitle ? String(n.refTitle).slice(0, 120) : null });
+    }
+  }
+  return out.sort((a, b) => b.updated - a.updated);
+}
+const flat = (s) => String(s || '').replace(/^#{1,3}\s+/gm, '').replace(/^\s*>\s?/gm, '').replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/gm, '').replace(/\*\*|`/g, '').replace(/\s+/g, ' ').trim();
+/* What the assistant is told about the notes without asking: names, dates,
+   and the start of each. read_notes gives the whole of any of them. */
+export function notesIndex(uid, pack) {
+  const hasNotes = !!pack && ((pack.manifest.storage && pack.manifest.storage.keys) || []).some((k) => /-notes$/.test(k));
+  if (!hasNotes) return null;                       // a course without a notes panel
+  const all = notesOf(uid, pack);
+  if (!all.length) return { count: 0, list: [] };
+  return { count: all.length, list: all.slice(0, 25).map((n) => ({ title: n.title, edited: n.updated ? new Date(n.updated).toISOString().slice(0, 10) : null,
+    page: n.page, words: flat(n.body) ? flat(n.body).split(' ').length : 0, start: flat(n.body).slice(0, 160) })) };
 }
 
 function itemState(uid, pack, id) {
@@ -168,6 +203,8 @@ export function describe(uid, courseId, ref) {
     exercise: item ? { id: item.id, kind: item.kind, title: item.title, prompt: item.prompt || '', passed: item.passed, attempts: item.attempts, hintsTaken: hintsTaken(uid, pack, item), hintsTotal: (item.hints || []).length } : null,
     progress: { percent: ov.percent, finished: ov.finished, count: ov.count, lessons: ov.lessons, current: ov.current || null, next: ov.next || null, continue: ov.continue || null, minutesLeft: ov.minutesLeft },
     reading: !ref || ref === here.ref ? reading(pack.id) : null,
+    quizzes: quizSummary(uid, pack.id),
+    notes: notesIndex(uid, pack),
     where: Object.assign(where(), { text: undefined }),
   };
 }

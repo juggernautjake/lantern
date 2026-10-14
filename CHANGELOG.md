@@ -1,5 +1,11 @@
 # What's new
 
+## 0.1.7
+
+- **Lantern reviews every quiz.** When a module check, a practice set or a mock exam ends, Lantern looks over every answer on its own: it writes a short review (what went well, which topics to work on and which reading to go back to), says it aloud, and finds videos for your weak spots. The same review shows under your score in the course. Lantern also remembers how your quizzes have gone, so you can ask it what to work on.
+- **Your notes, and Lantern knows them.** Courses can now keep notes that save with your progress. Lantern's assistant sees your notes, can read any of them in full ("quiz me on my curves notes"), and can write one down when you ask.
+- **FS Exam Prep 1.1.4:** the quiz review, strong and weak topics on the Progress page, practice aimed at your weak spots, and a Notes panel. See the course's own notes.
+
 ## 0.1.6
 
 - **The voice reads calculator keys.** Arrow keys are said as presses ("math, right, right, six"), the HP shift keys as "left shift" and "right shift", and the empty boxes on template keys as "box".

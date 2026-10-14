@@ -16,6 +16,9 @@
      GET  /api/assistant/mic          may Lantern listen for its wake word now?
      POST /api/assistant/resources    { topic?, refresh? } → the resource finder
      POST /api/assistant/play         { query } → YouTube results to play
+     POST /api/assistant/review       { course, report } → Lantern's review of a
+                                      finished check, practice set or mock exam:
+                                      { id, text, speak, videos, via } (review.js)
      GET  /api/assistant/context      what the assistant knows about "this"
    =========================================================================== */
 
@@ -23,6 +26,7 @@ import * as brain from './brain.js';
 import * as chatMod from './chat.js';
 import * as context from './context.js';
 import * as resources from './resources.js';
+import * as reviewMod from './review.js';
 import * as settings from '../platform/settings.js';
 import * as eco from '../platform/eco.js';
 import * as bus from '../platform/bus.js';
@@ -144,6 +148,17 @@ export function register(r) {
     const d = context.describe(local.userId(), b.course, b.ref);
     return { body: await resources.find(d, pack ? context.resourcesOf(pack) : null, { topic: b.topic || null, refresh: !!b.refresh }) };
   });
+  r.post('/api/assistant/review', async ({ body }) => {
+    const b = body || {};
+    if (!b.report || typeof b.report !== 'object') return { status: 400, body: { error: 'No results to review.' } };
+    const uid = local.userId();
+    const course = typeof b.course === 'string' ? b.course : (b.report.course || null);
+    const pack = context.currentPack(course);
+    const ctx = context.describe(uid, pack ? pack.id : course);
+    // remembered only against a course that is installed here
+    const report = Object.assign({}, b.report, { course: pack ? pack.id : null });
+    return { body: await reviewMod.review(report, { uid, ctx, res: pack ? context.resourcesOf(pack) : null }) };
+  }, { maxBody: 256 * 1024 });
   r.post('/api/assistant/play', async ({ body }) => {
     const list = await resources.playable(String((body && body.query) || 'focus')).catch(() => []);
     return { body: { queue: list.map((v) => ({ videoId: v.videoId, title: v.title, source: v.source, thumbnail: v.thumbnail })) } };

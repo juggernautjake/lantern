@@ -73,7 +73,7 @@ async function start() {
   LS.on('reminder', (ev) => { if (A.prefs.enabled && ev && ev.text && !(A.info.quiet && A.info.quiet.quiet)) say(ev.text); });
   LS.on('here', () => { if (A.tab === 'resources') showResources(); });
   refreshMic();
-  window.LanternAssistant = { say, stop: stopSpeaking, send, showResources, play: playQueue, media: mediaControl, state: () => ({ speaking: A.speaking, queue: speechQueue().length, gen: speechQueue().generation, listening: A.listening, peer: A.peer, lamp: A.lamp ? A.lamp.getState() : null, media: A.media.queue.length ? { index: A.media.index, title: (A.media.queue[A.media.index] || {}).title, kind: A.media.kind } : null }) };
+  window.LanternAssistant = { say, stop: stopSpeaking, send, showResources, play: playQueue, media: mediaControl, reviewResults, state: () => ({ speaking: A.speaking, queue: speechQueue().length, gen: speechQueue().generation, listening: A.listening, peer: A.peer, lamp: A.lamp ? A.lamp.getState() : null, media: A.media.queue.length ? { index: A.media.index, title: (A.media.queue[A.media.index] || {}).title, kind: A.media.kind } : null }) };
 }
 
 const displayPrefs = () => {
@@ -238,12 +238,57 @@ function runAction(a) {
     case 'play': playQueue(a.queue || [], a.index || 0, a.kind || 'video'); break;
     case 'media': mediaControl(a.action); break;
     case 'resources': showDock(); setTab('resources'); paintResources(a); break;
+    case 'note': if (!(LS.toCourse && LS.toCourse(a.course, { lantern: 'notes-add', title: a.title, text: a.text, mode: a.mode }))) toast('Open the course to see the note.'); break;
     default: break;
   }
 }
 function openRef(course, ref) {
   if (!course) return;
   location.hash = ref ? '#/learn/' + encodeURIComponent(course) + '?open=' + encodeURIComponent(ref) : '#/course/' + encodeURIComponent(course);
+}
+
+/* ============================================================== reviews === */
+/* A check, practice set or mock exam just ended in the course: Lantern looks
+   over the answers (POST /api/assistant/review), shows the review here, says
+   the gist, and puts the videos for the weak topics in Resources. The reply
+   also goes back to the course page, which shows it under the score. Runs one
+   at a time, like talking. */
+let reviewChain = Promise.resolve();
+export function reviewResults(course, report) {
+  const run = reviewChain.then(() => reviewNow(course, report));
+  reviewChain = run.catch(() => null);
+  return run;
+}
+async function reviewNow(course, report) {
+  // Lantern switched off: no AI call and no voice; the page writes its own review.
+  if (!A.prefs || !A.prefs.enabled) return null;
+  showDock();
+  A.audio.resume().catch(() => {});
+  setLamp('think'); setStatus('Looking over your answers…'); A.thinking = true;
+  let out;
+  try { out = await api('/api/assistant/review', { method: 'POST', body: { course, report } }); }
+  catch (e) { out = null; }
+  A.thinking = false;
+  if (!out || !out.text) { setLamp('idle'); setStatus(readyText()); return out; }
+  const vids = (out.videos || []).flatMap((g) => g.items.map((v) => Object.assign({ topic: g.topic }, v)));
+  const button = vids.length ? el('button', { class: 'btn', type: 'button', 'data-testid': 'review-videos', onclick: () => { setTab('resources'); paintReviewVideos(out.videos); } }, 'Videos for your weak spots (' + vids.length + ')') : null;
+  addMsg('lantern', out.text, { button });
+  if (vids.length && A.tab === 'resources') paintReviewVideos(out.videos);
+  if (A.prefs && A.prefs.speakReplies && out.speak) { setStatus('Answering…'); say(out.speak); } else { setLamp('idle'); setStatus(readyText()); }
+  return out;
+}
+function paintReviewVideos(groups) {
+  const box = $('.as-res');
+  if (!box) return;
+  box.innerHTML = '';
+  box.appendChild(el('h3', { text: 'For your weak spots' }));
+  const all = groups.flatMap((g) => g.items);
+  const queue = all.map((x) => ({ videoId: x.videoId, title: x.title, source: x.source, thumbnail: x.thumbnail }));
+  for (const g of groups) {
+    box.appendChild(el('h4', { text: g.topic }));
+    box.appendChild(el('div', { class: 'as-cards', 'data-testid': 'review-video-cards' }, g.items.map((v) => card(Object.assign({ type: 'video' }, v), () => playQueue(queue, all.indexOf(v), 'video')))));
+  }
+  box.appendChild(el('button', { class: 'btn quiet', type: 'button', onclick: () => showResources() }, 'Resources for this page instead'));
 }
 
 /* =============================================================== speech === */
