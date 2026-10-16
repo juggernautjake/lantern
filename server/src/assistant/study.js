@@ -22,6 +22,7 @@ import { readFileSync } from 'node:fs';
 import * as packs from '../platform/packs.js';
 import * as brain from './brain.js';
 import * as review from './review.js';
+import { courseSpeech } from '../../public/shell/course-speech.js';
 
 const json = new Map();
 function packJson(pack, rel) {

@@ -1,5 +1,12 @@
 # What's new
 
+## 0.1.9
+
+- **Lantern's voice is back for courses with their own pronunciations.** In 0.1.8, Lantern fell back to the computer's own voice in FS Exam Prep instead of using ElevenLabs. It speaks with its own voice again, saying the course's terms the way the lessons do.
+- **The mock exam, sat like the real one.** A clock with pause, a map of every question, "mark for review" and "I don't know" on each one, and the paper saved as you go.
+- **Lantern finds what to work on most.** After a mock exam, Lantern ranks your gaps, counting "I don't know" as a gap even when the guess was right. It explains the core of each and sends you to the lesson, its video and practice. It can also look at all your papers together.
+- **FS Exam Prep 1.2.1:** the new mock exam. See the course's own notes.
+
 ## 0.1.8
 
 - **Lantern on your phone.** Turn on Settings → Phone and open Lantern in Safari or Chrome on your phone, anywhere, while your computer is on. It goes through Tailscale, a private network between your own devices; nothing is opened to the internet, and only your own account gets in. The whole app is laid out for a phone: a tab bar, full-screen panels, the assistant as a sheet above the keyboard, and Add to Home Screen.
