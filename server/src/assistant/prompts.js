@@ -83,6 +83,20 @@ comparing approaches and suggesting improvements is exactly what is wanted now.`
       bits.push('\n' + fence('quiz_record', q.join('\n')));
       bits.push('Use the quiz record when they ask how they are doing, what to study or what they are weak at: name the topics, the reading to go back to, and offer find_resources videos for them.');
     }
+    // the lesson's video, and the course's notation: say it the way the lessons do
+    if (d.video) bits.push('\nThis lesson has a video, "' + d.video.title + '" (chapters: ' + d.video.chapters.join('; ') + '). lesson_video gives its whole script, the numbers on its board and its questions; use it to explain the video again or to send them to the right chapter.');
+    if (d.notation && d.notation.length) {
+      // The module they are in comes first, with ITS meaning of each symbol: T is the field
+      // temperature in taping (module 3) but the tangent distance on a curve (module 5).
+      const mod = d.unit && d.unit.n != null ? String(d.unit.n) : null;
+      const inMod = (e) => mod && ((e.byModule && e.byModule[mod]) || (e.modules || []).map(String).includes(mod));
+      const meaningOf = (e) => (mod && e.byModule && e.byModule[mod]) || e.meaning;
+      const line = (e) => e.symbol + ' = ' + meaningOf(e) + (e.units && e.units !== '—' ? ' (' + e.units + ')' : '') + (e.say && e.say !== e.symbol ? ' [said "' + e.say + '"]' : '');
+      const here = d.notation.filter(inMod), rest = d.notation.filter((e) => !inMod(e));
+      const list = (here.length ? ['In module ' + mod + ' (what they are studying now):'].concat(here.map(line), ['', 'Elsewhere in the course:']) : []).concat(rest.map(line));
+      bits.push('\n' + fence('course_notation', 'Write every symbol exactly as the course does (and say it as given):\n' + list.slice(0, 200).join('\n')));
+      bits.push('Use the course notation above in every equation and explanation: the same symbols, subscripts and units (h_cr, σ_m, ΣBS, Az, C_t, E_allow …), never a different name for the same thing, and the same numbers and rounding as the lesson or question you are discussing, so what you say matches what they see and hear in the videos. Write maths with these plain symbols (×, ·, −, √, ², °′″, Σ, Δ), never LaTeX, so it reads and is spoken correctly.');
+    }
     const nt = d.notes;
     if (nt && nt.count) {
       const n = ['Their own notes in this course (' + nt.count + ', newest first; the start of each — read_notes gives the whole):'];

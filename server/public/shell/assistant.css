@@ -123,3 +123,74 @@ body[data-lantern-mode="listen"] .as-status { color: var(--accent, #e8b84a); }
 @keyframes as-think { 0%, 100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
 @keyframes as-speak { from { height: 3px; } to { height: 13px; } }
 @media (prefers-reduced-motion: reduce) { .as-mode i { animation: none !important; } }
+
+.as-close .ic-sheet { display: none; }
+
+/* ================================================================ phone ===
+   Lantern as a full-screen sheet (body[data-dock="sheet"], set by
+   assistant.js on a phone). It is sized to the visible part of the screen
+   (--vvh, --vvt from visualViewport), so when the on-screen keyboard opens the
+   message box rides just above it. Same query as shell.css. */
+@media (max-width: 720px), (max-height: 500px) and (max-width: 1000px) {
+  html.as-sheet-open, html.as-sheet-open body { overflow: hidden; overscroll-behavior: none; }
+  body[data-dock="sheet"] #assistant-slot.as-slot {
+    position: fixed; left: 0; right: 0; bottom: auto; top: var(--vvt, 0px); z-index: 60;
+    width: 100%; height: var(--vvh, 100dvh); border: 0; box-shadow: none; background: var(--surface);
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
+    animation: as-sheet-in .24s var(--ease, ease-out);
+  }
+  @keyframes as-sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .as-panel { height: 100%; }
+
+  /* the head: a small lantern, the name and what it is doing, then Stop and Close */
+  body[data-dock="sheet"] .as-head { flex: none; gap: 10px; padding: 6px 8px 6px 14px; min-height: 64px; background: var(--surface); }
+  body[data-dock="sheet"] .as-lamp { width: 34px; height: 54px; }
+  body[data-dock="sheet"] .as-title b { font-size: 1.2rem; line-height: 1.2; }
+  body[data-dock="sheet"] .as-status { font-size: .85rem; }
+  body[data-dock="sheet"] .as-tools { align-self: center; gap: 6px; }
+  .as-ico { touch-action: manipulation; }
+  body[data-dock="sheet"] .as-ico { min-width: 44px; height: 44px; font-size: 17px; }
+  body[data-dock="sheet"] .as-close { background: var(--surface-2); border-color: var(--line-2); font-size: 18px; font-weight: 600; }
+  body[data-dock="sheet"] .as-close .ic-dock { display: none; }
+  body[data-dock="sheet"] .as-close .ic-sheet { display: inline; }
+  body[data-dock="sheet"] .as-tabs { flex: none; padding: 6px 12px; background: var(--surface); }
+  body[data-dock="sheet"] .as-tabs button { min-height: 44px; font-weight: 600; }
+
+  /* the conversation */
+  body[data-dock="sheet"] .as-log { padding: 16px 14px 10px; gap: 12px; background: var(--bg); -webkit-overflow-scrolling: touch; }
+  body[data-dock="sheet"] .as-msg { max-width: 88%; padding: 10px 14px; font-size: 16px; line-height: 1.5; border-radius: 18px; }
+  body[data-dock="sheet"] .as-msg.me { border-bottom-right-radius: 6px; }
+  body[data-dock="sheet"] .as-msg.lantern { border-bottom-left-radius: 6px; border-left-width: 1px; background: var(--surface); }
+  /* Stop shows only while Lantern is talking or listening */
+  body[data-dock="sheet"]:not([data-lantern-mode="speak"]):not([data-lantern-mode="listen"]) [data-testid=stop-speaking] { display: none; }
+  body[data-dock="sheet"] .as-msg .btn { margin-top: 8px; }
+  body[data-dock="sheet"] .as-links li { margin: 8px 0; }
+
+  /* the message box: the mic (when the browser can listen), the text, Send */
+  body[data-dock="sheet"] .as-input { flex: none; gap: 8px; align-items: flex-end; padding: 8px max(10px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) 10px; background: var(--surface); }
+  html[data-kb] body[data-dock="sheet"] .as-input { padding-bottom: 8px; }
+  body[data-dock="sheet"] .as-input textarea { min-height: 44px; height: 44px; max-height: 128px; padding: 10px 16px; border-radius: 22px; font-size: 16px; line-height: 1.4; resize: none; }
+  body[data-dock="sheet"] .as-input .btn { min-height: 44px; border-radius: 22px; padding: 0 18px; font-weight: 600; }
+  body[data-dock="sheet"] .as-input .as-ico { flex: none; width: 44px; border-radius: 50%; }
+
+  /* resources */
+  body[data-dock="sheet"] .as-res { padding: 14px; background: var(--bg); -webkit-overflow-scrolling: touch; }
+  body[data-dock="sheet"] .as-res-search input { font-size: 16px; min-height: 44px; }
+  body[data-dock="sheet"] .as-card { grid-template-columns: 104px minmax(0, 1fr); }
+  body[data-dock="sheet"] .as-card img { width: 104px; }
+  body[data-dock="sheet"] .as-card .btn { min-height: 44px; padding: 6px 14px; font-size: .95rem; }
+  body[data-dock="sheet"] .as-cards.list .as-card { grid-template-columns: 34px minmax(0, 1fr); }
+
+  /* the mini player: above the tab bar, the width of the screen */
+  #media-slot { left: 8px; right: 8px; bottom: calc(var(--tabbar, 0px) + 8px); }
+  body.playing #media-slot { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .as-media, .as-media.big { width: 100%; }
+  .as-mctl .as-ico { min-width: 40px; height: 40px; }
+  .as-vol { display: none; }
+}
+/* landscape: the lantern and the head are smaller still */
+@media (max-height: 500px) and (max-width: 1000px) {
+  body[data-dock="sheet"] .as-head { min-height: 52px; padding-top: 4px; padding-bottom: 4px; }
+  body[data-dock="sheet"] .as-lamp { width: 26px; height: 42px; }
+  body[data-dock="sheet"] .as-tabs { padding: 4px 12px; }
+}

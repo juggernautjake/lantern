@@ -29,7 +29,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from './build-pack.mjs';
 import { readPresence } from '../server/src/platform/eco.js';
-import { notesSince } from '../server/src/platform/packs.js';
+import { notesSince, parsePack } from '../server/src/platform/packs.js';
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..');
 
@@ -62,8 +62,10 @@ async function viaServiceKey(file, flags) {
   const url = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
-  const buf = readFileSync(file);
-  const m = JSON.parse(buf.toString('utf8')).manifest;
+  let buf = readFileSync(file);
+  const m = parsePack(buf).manifest;
+  // a big pack (narration) goes up gzipped, under the hub's 50 MB file limit (Lantern 0.1.8+ unzips it)
+  if (buf.length > 40 * 1048576) buf = (await import('node:zlib')).gzipSync(buf, { level: 9 });
   // a legacy service_role key is a JWT and also goes in Authorization; a newer sb_secret_ key goes in apikey only
   const H = Object.assign({ apikey: key, 'content-type': 'application/json' }, /^eyJ/.test(key) ? { authorization: 'Bearer ' + key } : {});
   const rest = async (method, path, body, extra) => {
@@ -73,8 +75,15 @@ async function viaServiceKey(file, flags) {
     return t ? JSON.parse(t) : null;
   };
   const cur = (await rest('GET', '/rest/v1/courses?id=eq.' + encodeURIComponent(m.id) + '&select=*'))[0] || null;
-  const path = m.id + '/' + m.version + '.lpack';
-  await rest('POST', '/storage/v1/object/course-packs/' + path, buf, { 'x-upsert': 'true' });
+  const path0 = m.id + '/' + m.version + '.lpack';
+  // over 40 MB even compressed: in parts, joined by Lantern 0.1.8+ (sync/supabase.js)
+  const PART = 40 * 1048576;
+  let path = path0;
+  if (buf.length > PART) {
+    const n = Math.ceil(buf.length / PART);
+    for (let i = 0; i < n; i++) await rest('POST', '/storage/v1/object/course-packs/' + path0 + '.p' + (i + 1), buf.subarray(i * PART, Math.min(buf.length, (i + 1) * PART)), { 'x-upsert': 'true' });
+    path = path0 + '?parts=' + n;
+  } else await rest('POST', '/storage/v1/object/course-packs/' + path0, buf, { 'x-upsert': 'true' });
   const status = flags.status || (cur ? cur.status : 'draft');
   await rest('POST', '/rest/v1/courses', [{ id: m.id, title: m.title, description: m.description || '', status,
     visibility: flags.visibility || (cur ? cur.visibility : 'private'), listed: flags.listed !== undefined ? flags.listed : (cur ? cur.listed : false) }],

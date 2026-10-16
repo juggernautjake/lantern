@@ -28,6 +28,7 @@ import { createLayout } from '/eco/client/layout-core.js';
 import { pickBrowserVoice } from '/eco/shared/voices-defaults.mjs';
 import { createSpeechQueue } from '/shell/speech-queue.js';
 import { spoken } from '/shell/spoken.js';
+import { courseSpeech } from '/shell/course-speech.js';
 import { createWakeListener, recordRequest } from '/shell/wake.js';
 
 const LS = window.LanternShell;
@@ -57,14 +58,21 @@ async function start() {
     test: (k) => testSound(k),
     extra: (box) => box.appendChild(el('p', { class: 'hint', text: 'Lantern plays through this computer’s usual speakers. To change them, use Windows’ sound settings.' })),
   });
-  $('#sound-btn').addEventListener('click', () => { A.audio.resume().catch(() => {}); A.panel.toggle(); });
+  $('#sound-btn').addEventListener('click', () => { resumeAudio(); A.panel.toggle(); });
   $('#assistant-btn').addEventListener('click', toggleDock);
   window.addEventListener('lantern:resources', () => { showDock(); showResources(); });
-  document.addEventListener('pointerdown', () => { A.audio.resume().catch(() => {}); }, { once: true, capture: true });
+  window.addEventListener('lantern:show-assistant', () => { if (A.prefs && A.prefs.enabled) { unlockAudio(); showDock(); setTab('talk'); } });
+  document.addEventListener('pointerdown', () => { resumeAudio(); }, { once: true, capture: true });
+  // iOS plays audio only from a tap: the first one unlocks Lantern's voice
+  ['touchend', 'click', 'keydown'].forEach((t) => document.addEventListener(t, unlockAudio, { capture: true, passive: true }));
 
   LS.registerAssistant(buildPanel);
   applyDock();
   try { window.matchMedia('(max-width: 900px)').addEventListener('change', applyDock); } catch (e) { /* old browser */ }
+  try { window.matchMedia(PHONE_Q).addEventListener('change', applyDock); } catch (e) { /* old browser */ }
+  // the on-screen keyboard: the sheet follows the visible part of the screen
+  if (window.visualViewport) { const vv = window.visualViewport; const f = () => requestAnimationFrame(fitViewport); vv.addEventListener('resize', f); vv.addEventListener('scroll', f); }
+  window.addEventListener('resize', () => requestAnimationFrame(fitViewport));
   registerSettingsSections();
   LS.on('eco-in', onEco);
   LS.on('mic', () => refreshMic());
@@ -73,8 +81,12 @@ async function start() {
   LS.on('reminder', (ev) => { if (A.prefs.enabled && ev && ev.text && !(A.info.quiet && A.info.quiet.quiet)) say(ev.text); });
   LS.on('here', () => { if (A.tab === 'resources') showResources(); });
   refreshMic();
-  window.LanternAssistant = { say, stop: stopSpeaking, send, showResources, play: playQueue, media: mediaControl, reviewResults, state: () => ({ speaking: A.speaking, queue: speechQueue().length, gen: speechQueue().generation, listening: A.listening, peer: A.peer, lamp: A.lamp ? A.lamp.getState() : null, media: A.media.queue.length ? { index: A.media.index, title: (A.media.queue[A.media.index] || {}).title, kind: A.media.kind } : null }) };
+  window.LanternAssistant = { say, stop: stopSpeaking, send, showResources, play: playQueue, media: mediaControl, reviewResults, unlock: unlockAudio, fitViewport, state: () => ({ speaking: A.speaking, queue: speechQueue().length, gen: speechQueue().generation, listening: A.listening, wakeWanted: !!A.recWanted, audioUnlocked: !!A.unlocked, peer: A.peer, lamp: A.lamp ? A.lamp.getState() : null, media: A.media.queue.length ? { index: A.media.index, title: (A.media.queue[A.media.index] || {}).title, kind: A.media.kind } : null }) };
 }
+
+// Wake the audio chain (after a tap). A browser without Web Audio throws here
+// rather than refusing, and that must never stop a reply from arriving.
+function resumeAudio() { try { const p = A.audio && A.audio.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* no Web Audio */ } }
 
 const displayPrefs = () => {
   const d = (A.prefs && A.prefs.display) || {};
@@ -111,7 +123,8 @@ function buildPanel(slot) {
   const modeDots = el('span', { class: 'as-mode', 'aria-hidden': 'true' }, [el('i'), el('i'), el('i'), el('i'), el('i')]);
   const talk = el('button', { class: 'as-ico', type: 'button', 'data-testid': 'ptt', title: 'Push to talk: press, then speak', 'aria-label': 'Push to talk' }, '🎙️');
   const stop = el('button', { class: 'as-ico', type: 'button', 'data-testid': 'stop-speaking', title: 'Stop talking (Esc)', 'aria-label': 'Stop talking' }, '■');
-  const hide = el('button', { class: 'as-ico', type: 'button', title: 'Hide Lantern', 'aria-label': 'Hide Lantern' }, '⟩');
+  // "⟩" beside the page; on a phone, where Lantern is a full-screen sheet, "✕ Close"
+  const hide = el('button', { class: 'as-ico as-close', type: 'button', title: 'Hide Lantern', 'aria-label': 'Hide Lantern', 'data-testid': 'assistant-close' }, [el('span', { class: 'ic-dock', 'aria-hidden': 'true', text: '⟩' }), el('span', { class: 'ic-sheet', 'aria-hidden': 'true', text: '✕' })]);
   talk.addEventListener('click', pushToTalk);
   stop.addEventListener('click', () => { stopSpeaking(); if (A.request) A.request.stop(); });
   hide.addEventListener('click', toggleDock);
@@ -124,8 +137,17 @@ function buildPanel(slot) {
   const input = el('textarea', { rows: '2', placeholder: 'Ask Lantern… (Enter to send)', 'aria-label': 'Message to Lantern', 'data-testid': 'assistant-input' });
   const sendBtn = el('button', { class: 'btn primary', type: 'submit', 'data-testid': 'assistant-send' }, 'Send');
   const form = el('form', { class: 'as-input' }, [input, sendBtn]);
-  form.addEventListener('submit', (e) => { e.preventDefault(); const t = input.value.trim(); if (!t) return; input.value = ''; send(t); });
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
+  // on a phone the box grows with what is typed, up to a few lines
+  const fit = () => {
+    input.style.removeProperty('height');
+    if (!phone() || !input.value) return;
+    input.style.height = '0px';
+    input.style.height = Math.min(128, Math.max(44, input.scrollHeight + 2)) + 'px';
+  };
+  form.addEventListener('submit', (e) => { e.preventDefault(); const t = input.value.trim(); if (!t) return; input.value = ''; fit(); send(t); });
+  input.addEventListener('input', fit);
+  // Enter sends on a keyboard; on a phone's own keyboard, Return is a new line and Send sends
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !touchKeyboard()) { e.preventDefault(); form.requestSubmit(); } });
   const head = el('div', { class: 'as-head ln-lampglow' }, [lampBox,
     el('div', { class: 'as-title' }, [el('b', { text: A.prefs.wakeWord || 'Lantern' }), el('span', { class: 'as-statusline' }, [modeDots, status])]),
     el('div', { class: 'as-tools' }, [talk, stop, hide])]);
@@ -134,7 +156,29 @@ function buildPanel(slot) {
   A.lamp = mountLantern(lampBox, Object.assign({ size: 0, label: 'Lantern' }, avatarOptions(A.prefs.avatar)));
   A.lamp.setState(A.prefs.enabled ? 'idle' : 'off');
   greet(log);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (A.speaking || speechQueue().length)) stopSpeaking(); });
+  placeMic();
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (A.speaking || speechQueue().length) stopSpeaking();
+    else if (document.body.dataset.dock === 'sheet') toggleDock();
+  });
+}
+/* On a phone the microphone sits beside the message box, where a thumb
+   expects it, and shows only if this browser can turn speech into words.
+   Beside the page it stays with the other tools, as before. */
+const touchKeyboard = () => phone() && (navigator.maxTouchPoints > 0 || !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches));
+function placeMic() {
+  const ptt = $('[data-testid=ptt]'), form = $('.as-input'), tools = $('.as-tools');
+  if (!ptt || !form || !tools) return;
+  const input = $('[data-testid=assistant-input]');
+  if (input) input.placeholder = touchKeyboard() ? 'Ask Lantern…' : 'Ask Lantern… (Enter to send)';
+  if (phone()) {
+    ptt.hidden = !recognitionClass();
+    if (ptt.parentNode !== form) form.insertBefore(ptt, form.firstChild);
+  } else {
+    ptt.hidden = false;
+    if (ptt.parentNode !== tools) tools.insertBefore(ptt, tools.firstChild);
+  }
 }
 function greet(log) {
   const ai = A.info.ai;
@@ -161,25 +205,99 @@ function setLamp(state) {
   document.body.dataset.lanternMode = st;
 }
 
-const narrow = () => !!(window.matchMedia && window.matchMedia('(max-width: 900px)').matches);
+// A phone: the same query as the phone rules in shell.css (LanternShell.PHONE_Q).
+const PHONE_Q = LS.PHONE_Q || '(max-width: 720px), (max-height: 500px) and (max-width: 1000px)';
+const phone = () => !!(window.matchMedia && window.matchMedia(PHONE_Q).matches);
+// Opened on the owner's phone through Tailscale (docs/dev/phone.md).
+const remote = () => (LS.isRemote ? LS.isRemote() : /\.ts\.net$/i.test(location.hostname));
+const narrow = () => phone() || !!(window.matchMedia && window.matchMedia('(max-width: 900px)').matches);
 let openHere = false;          // on a phone: opened with the button, this visit
 function applyDock() {
   const slot = $('#assistant-slot');
   let dock = A.prefs.enabled ? A.prefs.dock : 'hidden';
-  if (dock !== 'hidden' && narrow() && !openHere) dock = 'hidden';
+  // On a phone Lantern is a full-screen sheet, opened when asked and never
+  // saved as the computer's choice of where it sits.
+  if (phone()) dock = A.prefs.enabled && openHere ? 'sheet' : 'hidden';
+  else if (dock !== 'hidden' && narrow() && !openHere) dock = 'hidden';
+  const was = document.body.dataset.dock;
   document.body.dataset.dock = dock;
   slot.hidden = dock === 'hidden';
   $('#assistant-btn').setAttribute('aria-pressed', dock === 'hidden' ? 'false' : 'true');
+  document.documentElement.classList.toggle('as-sheet-open', dock === 'sheet');
+  placeMic();
+  fitViewport();
+  if (dock === 'sheet' && was !== 'sheet') { const log = $('.as-log'); if (log) requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; }); }
 }
 function toggleDock() {
   const hidden = document.body.dataset.dock === 'hidden';
+  if (phone()) {
+    openHere = hidden;
+    if (hidden && !A.prefs.enabled) { savePrefs({ enabled: true }); return; }
+    applyDock(); return;
+  }
   if (narrow() && A.prefs.enabled && A.prefs.dock !== 'hidden') { openHere = hidden; applyDock(); return; }
   if (hidden) showDock(); else savePrefs({ dock: 'hidden' });
 }
 function showDock() {
   if (document.body.dataset.dock !== 'hidden') return;
+  if (phone()) { openHere = true; if (!A.prefs.enabled) savePrefs({ enabled: true }); else applyDock(); return; }
   if (narrow() && A.prefs.enabled && A.prefs.dock !== 'hidden') { openHere = true; applyDock(); return; }
   savePrefs({ enabled: true, dock: A.prefs.dock === 'hidden' || !A.prefs.dock ? 'right' : A.prefs.dock });
+}
+
+/* The on-screen keyboard. iOS does not shrink the window for it, only the
+   visible part (visualViewport): the sheet is sized to that part, so the
+   message box sits right above the keyboard and the conversation above it. */
+function fitViewport() {
+  const H = document.documentElement, vv = window.visualViewport;
+  if (!vv || !phone() || document.body.dataset.dock !== 'sheet') {
+    H.style.removeProperty('--vvh'); H.style.removeProperty('--vvt'); H.removeAttribute('data-kb');
+    return;
+  }
+  H.style.setProperty('--vvh', Math.round(vv.height) + 'px');
+  H.style.setProperty('--vvt', Math.round(vv.offsetTop || 0) + 'px');
+  const kb = window.innerHeight - vv.height > 120;
+  if (kb !== H.hasAttribute('data-kb')) {
+    H.toggleAttribute('data-kb', kb);
+    if (kb) { const log = $('.as-log'); if (log) log.scrollTop = log.scrollHeight; }
+  }
+}
+
+/* iOS lets a page start audio only from a tap, and a reply arrives seconds
+   after the tap that asked for it. So the first tap plays a moment of silence
+   through the one audio element every reply then uses (an element that has
+   played once from a tap may play again later), wakes the audio chain, and
+   primes the browser's own voice. On a phone, replies are spoken only after
+   that: a tap-started session. */
+function silence() {
+  // a twentieth of a second of silence: a WAV, 8 kHz, 8-bit, mono
+  const n = 400, b = new Uint8Array(44 + n), v = new DataView(b.buffer);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) b[o + i] = s.charCodeAt(i); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + n, true); str(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); str(36, 'data'); v.setUint32(40, n, true);
+  b.fill(0x80, 44);
+  return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+}
+function voiceEl() {
+  if (!A.voiceEl) { A.voiceEl = new Audio(); A.voiceEl.setAttribute('playsinline', ''); A.voiceEl.preload = 'auto'; }
+  return A.voiceEl;
+}
+function unlockAudio() {
+  if (A.unlocked || !A.audio) return;
+  A.unlocked = true;
+  resumeAudio();
+  if (!phone()) return;                      // a computer needs no more than that
+  try {
+    const a = voiceEl();
+    const src = silence();
+    a.src = src;
+    const p = a.play();
+    const done = () => { try { URL.revokeObjectURL(src); } catch (e) { /* fine */ } };
+    if (p && p.then) p.then(() => { if (a.src === src) a.pause(); done(); }, done);
+  } catch (e) { /* the voice falls back to the browser's own */ }
+  try {
+    if (window.speechSynthesis && window.SpeechSynthesisUtterance && !A.speaking) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; window.speechSynthesis.speak(u); }
+  } catch (e) { /* no voices */ }
 }
 
 function addMsg(who, text, opts) {
@@ -214,7 +332,7 @@ export function send(text) {
   return run;
 }
 async function sendNow(text) {
-  A.audio.resume().catch(() => {});
+  resumeAudio();
   setLamp('think'); setStatus('Thinking…'); A.thinking = true;
   let out;
   try { out = await api('/api/assistant/chat', { method: 'POST', body: { text } }); }
@@ -262,8 +380,10 @@ export function reviewResults(course, report) {
 async function reviewNow(course, report) {
   // Lantern switched off: no AI call and no voice; the page writes its own review.
   if (!A.prefs || !A.prefs.enabled) return null;
-  showDock();
-  A.audio.resume().catch(() => {});
+  // beside the page it opens to show the review; on a phone a full-screen sheet
+  // would cover the score, so the review waits behind a button instead
+  if (!phone()) showDock();
+  resumeAudio();
   setLamp('think'); setStatus('Looking over your answers…'); A.thinking = true;
   let out;
   try { out = await api('/api/assistant/review', { method: 'POST', body: { course, report } }); }
@@ -273,6 +393,9 @@ async function reviewNow(course, report) {
   const vids = (out.videos || []).flatMap((g) => g.items.map((v) => Object.assign({ topic: g.topic }, v)));
   const button = vids.length ? el('button', { class: 'btn', type: 'button', 'data-testid': 'review-videos', onclick: () => { setTab('resources'); paintReviewVideos(out.videos); } }, 'Videos for your weak spots (' + vids.length + ')') : null;
   addMsg('lantern', out.text, { button });
+  if (phone() && document.body.dataset.dock !== 'sheet') {
+    const t = toast(el('div', { class: 'row' }, [el('span', { text: 'Lantern looked over your answers.' }), el('button', { class: 'btn', type: 'button', 'data-testid': 'review-open', onclick: () => { t.remove(); showDock(); setTab('talk'); } }, 'Read it')]), { key: 'review', ms: 15000 });
+  }
   if (vids.length && A.tab === 'resources') paintReviewVideos(out.videos);
   if (A.prefs && A.prefs.speakReplies && out.speak) { setStatus('Answering…'); say(out.speak); } else { setLamp('idle'); setStatus(readyText()); }
   return out;
@@ -300,13 +423,13 @@ function speechQueue() {
     onStart: () => {
       A.speaking = true;
       notifySpeaking(true);
-      A.audio.duck(true);
+      try { A.audio.duck(true); } catch (e) { /* no Web Audio */ }
       setLamp('speak'); setStatus('Speaking…');
     },
     onEnd: () => {
       A.speaking = false;
       notifySpeaking(false);
-      A.audio.duck(false);
+      try { A.audio.duck(false); } catch (e) { /* no Web Audio */ }
       if (A.lamp) { A.lamp.setAnalyser(null); A.lamp.setLevel(0); }
       setLamp('idle'); setStatus('Ready');
     },
@@ -316,9 +439,23 @@ function speechQueue() {
 /* Say something: queued behind anything already being said. */
 export function say(text) {
   if (!A.prefs.enabled || !A.prefs.speakReplies) return;
-  const t = spoken(text);          // every number, equation, unit and bearing in words
+  if (phone() && !A.unlocked) return;   // a phone speaks only once a tap has started the session
+  // The reply goes on as written: the server voice turns it into words with the
+  // course's own pronunciations (ΣLat, h_cr, DEG mode) before anything else, and
+  // the browser's voice does the same here (speakable) — the same path the
+  // lesson narration takes, so Lantern says a formula the way the videos do.
+  const t = String(text || '').trim();
   if (t) speechQueue().say(t);
 }
+/* The current course's pronunciations, for the browser's own voice. */
+let courseWords = null, courseWordsAt = 0;
+async function loadCourseWords() {
+  if (courseWords && Date.now() - courseWordsAt < 60000) return courseWords;
+  try { const r = await api('/api/assistant/pronounce'); courseWords = (r && r.words) || {}; } catch (e) { courseWords = courseWords || {}; }
+  courseWordsAt = Date.now();
+  return courseWords;
+}
+async function speakable(raw) { return spoken(courseSpeech(String(raw || ''), await loadCourseWords())); }
 /* Stop now: what is playing, and everything queued. */
 export function stopSpeaking() {
   speechQueue().stop();
@@ -340,9 +477,10 @@ async function speakOne(text, stale) {
   } catch (e) { blob = null; }
   if (stale()) return;
   if (blob) return playBlob(blob, stale);
-  return browserSpeak(text, stale);
+  return browserSpeak(await speakable(text), stale);
 }
 function playBlob(blob, stale) {
+  if (phone()) return playBlobPhone(blob, stale);
   return new Promise((resolve) => {
     const a = new Audio();
     A.curAudio = a;
@@ -352,6 +490,34 @@ function playBlob(blob, stale) {
     a.onended = done; a.onerror = done;
     try { A.audio.playVoice(a).catch(done); if (A.lamp) A.lamp.setAnalyser(A.audio.analyser); }
     catch (e) { a.play().catch(done); }
+  });
+}
+/* On a phone: the one element the first tap unlocked, played directly (not
+   through the audio chain, which iOS may hold suspended after the app was in
+   the background; the phone's own buttons set the volume). The flame pulses
+   as it does with the browser's voices. If the phone still refuses, the
+   browser's own voice says it instead. */
+function playBlobPhone(blob, stale) {
+  return new Promise((resolve) => {
+    const a = voiceEl();
+    const url = URL.createObjectURL(blob);
+    A.curAudio = a;
+    a.onended = null; a.onerror = null;
+    a.src = url;
+    let pulse = null, over = false;
+    if (A.lamp) { A.lamp.setAnalyser(null); pulse = setInterval(() => A.lamp.setLevel(0.25 + Math.random() * 0.45), 110); }
+    const done = (fallback) => {
+      if (over) return; over = true;
+      clearInterval(watch); if (pulse) clearInterval(pulse); if (A.lamp) A.lamp.setLevel(0);
+      try { URL.revokeObjectURL(url); } catch (e) { /* fine */ }
+      if (A.curAudio === a) A.curAudio = null;
+      if (fallback && !stale()) speakable(A.sayingText || '').then((t) => browserSpeak(t, stale)).then(resolve, resolve); else resolve();
+    };
+    const watch = setInterval(() => { if (stale()) { try { a.pause(); } catch (e) { /* gone */ } done(); } }, 120);
+    a.onended = () => done(); a.onerror = () => done();
+    let p;
+    try { p = a.play(); } catch (e) { done(true); return; }
+    if (p && p.catch) p.catch((e) => done(e && e.name === 'NotAllowedError'));
   });
 }
 let voicesCache = null;
@@ -398,7 +564,7 @@ async function browserSpeak(text, stale) {
   } finally { if (pulse) clearInterval(pulse); if (A.lamp) A.lamp.setLevel(0); }
 }
 function testSound(k) {
-  A.audio.resume().catch(() => {});
+  resumeAudio();
   if (k === 'voice') return say('This is my voice, at this volume.');
   if (k === 'music' || k === 'video') return toast('Play something (ask me for focus music) to hear this level.');
   return A.audio.testChime();
@@ -428,7 +594,8 @@ function onEco(ev) {
 async function refreshMic() {
   try { A.info.mic = await api('/api/assistant/mic'); } catch (e) { return; }
   A.micOk = !!(A.info.mic && A.info.mic.lanternMayListen);
-  const want = A.prefs.enabled && A.prefs.wakeOn && A.micOk && (!AUTOMATED || !!window.__lanternFakeMic) && !!recognitionClass();
+  // never always-on over the phone link: there, the mic button is the way to talk
+  const want = A.prefs.enabled && A.prefs.wakeOn && A.micOk && !remote() && (!AUTOMATED || !!window.__lanternFakeMic) && !!recognitionClass();
   const t = $('[data-testid=ptt]');
   if (t) t.title = A.micOk ? 'Push to talk (or say “' + (A.prefs.wakeWord || 'Lantern') + '”)' : 'Push to talk. Dayspring is listening for its own name right now, so say “Dayspring” there, or press this.';
   if (want && !A.recWanted) startWake();
@@ -469,7 +636,8 @@ async function micMeter(on) {
     document.body.style.removeProperty('--lantern-mic');
     return;
   }
-  if (m || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+  // a phone: no second look (two microphone captures at once can stop the listening)
+  if (m || phone() || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     if (!A.request) { stream.getTracks().forEach((t) => t.stop()); return; }

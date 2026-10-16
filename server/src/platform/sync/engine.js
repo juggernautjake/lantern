@@ -519,6 +519,7 @@ export async function requestCourse(id, message) { return call('lantern_request_
    bucket, register the course (a new one starts as a draft unless told
    otherwise) and its version with the changelog since the last version.
    Everybody who has the course gets the new version on their next sync. */
+const GZIP_OVER = 40 * 1048576, PART_SIZE = 40 * 1048576;
 export async function publishPack(buf, opts) {
   const o = opts || {};
   if (!isOwner()) throw new HubError('Only the owner of this hub can publish courses.', 'denied');
@@ -528,20 +529,35 @@ export async function publishPack(buf, opts) {
     throw new HubError(manifest.title + ' ' + existing.latest_version + ' is already published; raise the version in course.json to publish again.', 'hub');
   }
   const path = manifest.id + '/' + manifest.version + '.lpack';
+  // Big packs (narration) go up gzipped, under the hub's file-size limit;
+  // parsePack unzips them. Small ones go as they are, for older copies of Lantern.
+  if (buf.length > GZIP_OVER && !packs.isGzip(buf)) {
+    const { gzipSync } = await import('node:zlib');
+    buf = gzipSync(buf, { level: 9 });
+  }
   let s = session();
   if (s.expires_at && s.expires_at - Date.now() < 60000) s = await refresh();
-  await need().upload(path, buf, s.access_token);
+  // over the hub's file limit even compressed: stored in parts (see supabase.js download)
+  let packPath = path;
+  if (buf.length > PART_SIZE) {
+    const n = Math.ceil(buf.length / PART_SIZE);
+    for (let i = 0; i < n; i++) {
+      if (s.expires_at && s.expires_at - Date.now() < 60000) s = await refresh();
+      await need().upload(path + '.p' + (i + 1), buf.subarray(i * PART_SIZE, Math.min(buf.length, (i + 1) * PART_SIZE)), s.access_token);
+    }
+    packPath = path + '?parts=' + n;
+  } else await need().upload(path, buf, s.access_token);
   const status = o.status || (existing ? existing.status : 'draft');
   await call('lantern_owner_save_course', { p_id: manifest.id, p_title: manifest.title, p_description: manifest.description || '',
     p_status: status, p_visibility: o.visibility || (existing ? existing.visibility : 'private'), p_listed: o.listed !== undefined ? !!o.listed : (existing ? existing.listed : false) });
   const { createHash } = await import('node:crypto');
   const { notesSince } = packs;
-  await call('lantern_owner_publish', { p_course: manifest.id, p_version: manifest.version, p_pack_path: path, p_size: buf.length,
+  await call('lantern_owner_publish', { p_course: manifest.id, p_version: manifest.version, p_pack_path: packPath, p_size: buf.length,
     p_sha256: createHash('sha256').update(buf).digest('hex'), p_changelog: notesSince(manifest, existing ? existing.latest_version : null),
     p_manifest: { id: manifest.id, title: manifest.title, version: manifest.version, units: (manifest.units || []).length, lessons: (manifest.lessons || []).length } });
   state.lastCatalog = 0;
   nudge();
-  return { id: manifest.id, version: manifest.version, status, path, previous: existing ? existing.latest_version : null };
+  return { id: manifest.id, version: manifest.version, status, path: packPath, previous: existing ? existing.latest_version : null };
 }
 
 /* -------------------------------------------------------------- friends --- */

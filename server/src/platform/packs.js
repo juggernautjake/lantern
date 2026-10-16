@@ -21,10 +21,13 @@
    LESSON IDS ARE A PROMISE. Progress is stored against them, so a new version
    of a pack may add lessons and change their words, but must never rename or
    drop an id a learner may have finished. install() refuses a version that
-   drops ids unless it is forced, and says which.
+   drops ids unless it is forced, and says which. The one exception: ids the
+   new version names in manifest.retired (a section a course deliberately
+   replaced). Their progress is kept; it no longer counts toward the total.
    =========================================================================== */
 
 import { createHash } from 'node:crypto';
+import { gunzipSync } from 'node:zlib';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, normalize, sep } from 'node:path';
 import { one, all, run, json } from '../db/db.js';
@@ -65,6 +68,7 @@ export function validateManifest(m) {
   }
   if (m.minPlatform && !VER_RX.test(String(m.minPlatform))) errs.push('minPlatform must look like 1.2.3.');
   if (m.storage && m.storage.keys && !Array.isArray(m.storage.keys)) errs.push('storage.keys must be a list.');
+  if (m.retired !== undefined && (!Array.isArray(m.retired) || m.retired.some((x) => typeof x !== 'string'))) errs.push('retired must be a list of lesson ids.');
   return errs;
 }
 
@@ -75,9 +79,13 @@ export function validateManifest(m) {
 export function buildPack(manifest, files) {
   const out = { lanternPack: FORMAT, manifest: Object.assign({}, manifest), files: {} };
   const assets = [];
+  // the raw bytes too (not enumerable, so JSON.stringify leaves them out): serializePack writes them as they are
+  const raw = {};
+  Object.defineProperty(out, 'raw', { value: raw, enumerable: false });
   for (const [p, data] of Object.entries(files)) {
     const rel = cleanRel(p);
     const buf = Buffer.isBuffer(data) ? data : Buffer.from(String(data), 'utf8');
+    raw[rel] = buf;
     out.files[rel] = buf.toString('base64');
     assets.push({ path: rel, size: buf.length, sha256: sha256(buf) });
   }
@@ -88,6 +96,44 @@ export function buildPack(manifest, files) {
   return out;
 }
 
+/* The bytes of a pack file. A small pack is the JSON document above, which any
+   copy of Lantern reads. A big one (a course with narration: hundreds of MB,
+   past the longest string JavaScript can hold once base64'd) is written in the
+   binary form, which Lantern 0.1.8+ reads:
+
+     "LANTERNPACK2 <header bytes>\n" + header JSON + the files' bytes, back to back
+
+   where the header is { lanternPack: 2, manifest, index: [[path, offset, length]] }
+   and each offset counts from the first byte after the header. */
+const MAGIC2 = 'LANTERNPACK2 ';
+export const BINARY_OVER = 100 * 1048576;
+export function serializePack(pack, opts) {
+  const raw = pack.raw || Object.fromEntries(Object.entries(pack.files).map(([p, b64]) => [p, Buffer.from(String(b64), 'base64')]));
+  const total = Object.values(raw).reduce((a, b) => a + b.length, 0);
+  const binary = (opts && opts.binary != null) ? opts.binary : total > BINARY_OVER;
+  if (!binary) return Buffer.from(JSON.stringify(pack), 'utf8');
+  const index = [];
+  let at = 0;
+  for (const [p, b] of Object.entries(raw)) { index.push([p, at, b.length]); at += b.length; }
+  const head = Buffer.from(JSON.stringify({ lanternPack: 2, manifest: pack.manifest, index }), 'utf8');
+  return Buffer.concat([Buffer.from(MAGIC2 + head.length + '\n', 'utf8'), head, ...Object.values(raw)]);
+}
+function parseBinary(buf) {
+  const nl = buf.indexOf(10, 0);
+  const len = Number(buf.subarray(MAGIC2.length, nl).toString('utf8'));
+  if (nl < 0 || !Number.isFinite(len) || len <= 0) throw new PackError('That course file is damaged (its header cannot be read).');
+  let head;
+  try { head = JSON.parse(buf.subarray(nl + 1, nl + 1 + len).toString('utf8')); } catch (e) { throw new PackError('That course file is damaged (its header cannot be read).'); }
+  const base = nl + 1 + len;
+  const files = {};
+  for (const [p, off, n] of head.index || []) {
+    if (base + off + n > buf.length) throw new PackError('This course file is incomplete: ' + p + ' is cut short. Download it again.');
+    files[p] = buf.subarray(base + off, base + off + n);
+  }
+  return { lanternPack: FORMAT, manifest: head.manifest, binaryFiles: files };
+}
+const isBinaryPack = (b) => Buffer.isBuffer(b) && b.length > MAGIC2.length && b.subarray(0, MAGIC2.length).toString('latin1') === MAGIC2;
+
 function cleanRel(p) {
   const rel = normalize(String(p)).replace(/\\/g, '/').replace(/^\/+/, '');
   if (!rel || rel.startsWith('..') || rel.includes('/../') || /^[A-Za-z]:/.test(rel)) throw new PackError('A file path in the pack is not allowed: ' + p);
@@ -96,18 +142,27 @@ function cleanRel(p) {
 
 /* A pack from a Buffer, a string or an object. Checks every file against the
    manifest's hashes, so a damaged download is refused rather than installed. */
+// A pack may travel gzipped (a course with narration is mostly base64, which
+// gzip takes back to about its real size): it is unzipped here, wherever it came from.
+export const isGzip = (b) => Buffer.isBuffer(b) && b.length > 2 && b[0] === 0x1f && b[1] === 0x8b;
 export function parsePack(input) {
   let pack = input;
-  if (Buffer.isBuffer(input) || typeof input === 'string') {
+  if (isGzip(input)) {
+    try { input = gunzipSync(input); } catch (e) { throw new PackError('That course file is damaged (it could not be unpacked).'); }
+    pack = input;
+  }
+  if (isBinaryPack(input)) pack = parseBinary(input);
+  else if (Buffer.isBuffer(input) || typeof input === 'string') {
     try { pack = JSON.parse(Buffer.isBuffer(input) ? input.toString('utf8') : input); }
     catch (e) { throw new PackError('That file is not a Lantern course file (it is not readable).'); }
   }
-  if (!pack || pack.lanternPack !== FORMAT || !pack.manifest || !pack.files) throw new PackError('That file is not a Lantern course file.');
+  if (!pack || pack.lanternPack !== FORMAT || !pack.manifest || !(pack.files || pack.binaryFiles)) throw new PackError('That file is not a Lantern course file.');
   const m = pack.manifest;
   const errs = validateManifest(m);
   if (errs.length) throw new PackError('This course file is not valid: ' + errs.join(' '), errs);
   const files = {};
-  for (const [p, b64] of Object.entries(pack.files)) files[cleanRel(p)] = Buffer.from(String(b64), 'base64');
+  if (pack.binaryFiles) for (const [p, b] of Object.entries(pack.binaryFiles)) files[cleanRel(p)] = b;
+  else for (const [p, b64] of Object.entries(pack.files)) files[cleanRel(p)] = Buffer.from(String(b64), 'base64');
   if (!files[cleanRel(m.entry)]) throw new PackError('This course file has no ' + m.entry + '.');
   for (const a of m.assets || []) {
     const f = files[a.path];
@@ -136,8 +191,10 @@ export function install(input, opts) {
   let dropped = [];
   if (prevManifest && Array.isArray(prevManifest.lessons)) {
     // Lessons, checks, exercises, projects and milestones: every id progress is kept against.
+    // …except the ones this version retires on purpose (manifest.retired): their progress stays kept, just not counted.
     const next = allIds(m);
-    dropped = [...allIds(prevManifest)].filter((id) => !next.has(id));
+    const retired = new Set(Array.isArray(m.retired) ? m.retired : []);
+    dropped = [...allIds(prevManifest)].filter((id) => !next.has(id) && !retired.has(id));
     if (dropped.length && !o.force) {
       throw new PackError(m.title + ' ' + m.version + ' removes lessons or exercises that people may have finished (' +
         dropped.slice(0, 5).join(', ') + (dropped.length > 5 ? '…' : '') + '). Lesson ids must stay the same between versions.', dropped);

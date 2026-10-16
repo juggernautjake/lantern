@@ -26,7 +26,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { buildPack, parsePack, validateManifest } from '../server/src/platform/packs.js';
+import { buildPack, parsePack, serializePack, validateManifest } from '../server/src/platform/packs.js';
 import { allIds } from '../server/src/platform/progress.js';
 import { cmp } from '../server/src/platform/semver.js';
 
@@ -122,6 +122,7 @@ export async function build(name, opts) {
     level: course.level || '', subject: course.subject || '', estimatedHours: course.estimatedHours || null,
     color: course.color || null, minPlatform: course.minPlatform || null, entry: 'index.html',
     storage: course.storage || { keys: [] }, progress: course.progress || null,
+    ...(Array.isArray(course.retired) && course.retired.length ? { retired: course.retired } : {}),
     units, lessons, changelog: course.changelog || [], builtAt: new Date().toISOString(),
   };
   const errs = validateManifest(manifest);
@@ -135,7 +136,7 @@ export async function build(name, opts) {
     try {
       const prev = parsePack(readFileSync(latest)).manifest;
       const now = allIds(manifest);
-      const gone = [...allIds(prev)].filter((x) => !now.has(x));
+      const gone = [...allIds(prev)].filter((x) => !now.has(x) && !(manifest.retired || []).includes(x));
       if (gone.length) warnings.push('These ids were in the last build and are gone (progress is kept against them; put them back or keep the old id): ' + gone.join(', '));
       if (cmp(manifest.version, prev.version) < 0) warnings.push('The version went DOWN from ' + prev.version + ' to ' + manifest.version + '.');
     } catch (e) { /* no usable previous build */ }
@@ -143,13 +144,14 @@ export async function build(name, opts) {
 
   const pack = buildPack(manifest, files);
   mkdirSync(outDir, { recursive: true });
-  const text = JSON.stringify(pack);
+  // a big pack (narration) is written in the binary form; a small one stays JSON (serializePack)
+  const text = serializePack(pack);
   writeFileSync(latest, text);
   writeFileSync(join(outDir, id + '-' + manifest.version + '.lpack'), text);
-  const size = (Buffer.byteLength(text) / 1024).toFixed(0);
+  const size = (text.length / 1024).toFixed(0);
   say('  ' + manifest.title + ' ' + manifest.version + ': ' + units.length + ' units, ' + lessons.length + ' lessons and checks, ' + allIds(manifest).size + ' ids, ' + size + ' KB → ' + relative(ROOT, latest));
   warnings.forEach((w) => console.warn('  WARNING: ' + w));
-  return { id, version: manifest.version, file: latest, versioned: join(outDir, id + '-' + manifest.version + '.lpack'), manifest, warnings, size: Buffer.byteLength(text) };
+  return { id, version: manifest.version, file: latest, versioned: join(outDir, id + '-' + manifest.version + '.lpack'), manifest, warnings, size: text.length };
 }
 
 /* The assistant's context must never carry an answer: no solution, starter,

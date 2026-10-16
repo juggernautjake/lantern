@@ -1,5 +1,15 @@
 # What's new
 
+## 0.1.8
+
+- **Lantern on your phone.** Turn on Settings → Phone and open Lantern in Safari or Chrome on your phone, anywhere, while your computer is on. It goes through Tailscale, a private network between your own devices; nothing is opened to the internet, and only your own account gets in. The whole app is laid out for a phone: a tab bar, full-screen panels, the assistant as a sheet above the keyboard, and Add to Home Screen.
+- **Narrated lesson videos.** Courses can now carry videos that Lantern plays as drawn, narrated lessons: figures, a board of working and a virtual calculator that presses every key. Watch straight through or step by step, with captions, a transcript, chapters and a few questions at the end. Lantern knows every video's script and can send you to the right part.
+- **Search the videos.** A course's Videos page now searches every video by topic, term, symbol or equation, including what the narrator says and what the board shows. It points you to the chapter to start from and the lessons that teach it. Filter by module or kind; the box at the top of the lesson list searches from any page.
+- **Study sessions.** A separate page for focused practice: your weak spots, an equation drill or a mixed review, with Lantern's suggested plan.
+- **Links between lessons stay in the course**, instead of opening a new tab.
+- **Lantern says it the way the lessons do.** The assistant writes every equation in the course's own symbols and says numbers, symbols, units and formulas the same way the lesson narrator does.
+- **FS Exam Prep 1.2.0:** all eleven modules rebuilt into 96 one-topic lessons, each with a video, interactive demos in the readings, and a video for every formula and every worked example. See the course's own notes.
+
 ## 0.1.7
 
 - **Lantern reviews every quiz.** When a module check, a practice set or a mock exam ends, Lantern looks over every answer on its own: it writes a short review (what went well, which topics to work on and which reading to go back to), says it aloud, and finds videos for your weak spots. The same review shows under your score in the course. Lantern also remembers how your quizzes have gone, so you can ask it what to work on.

@@ -59,7 +59,9 @@ export const ALLOW = [
   ['repo', '.'],             // README, LICENSE, launchers, icon, .gitignore, .github
 ];
 /* never, even inside an allowed folder */
-const NEVER = [/(^|[\\/])\.env$/, /(^|[\\/])data([\\/]|$)/, /\.db(-wal|-shm)?$/, /(^|[\\/])_probe\./, /\.lpack$/, /(^|[\\/])node_modules([\\/]|$)/, /\.log$/];
+const NEVER = [/(^|[\\/])\.env$/, /(^|[\\/])data([\\/]|$)/, /\.db(-wal|-shm)?$/, /(^|[\\/])_probe\./, /\.lpack$/, /(^|[\\/])node_modules([\\/]|$)/, /\.log$/,
+  // the FS course's own writing briefs and example script: course material, gated like the course
+  /(^|[\\/])docs[\\/]dev[\\/]fs-/];
 const KEEP_TARGET = new Set(['.git', 'node_modules', 'data', 'dist-out']);
 
 /* package.json is copied whole, but this repo's scripts reach into folders the

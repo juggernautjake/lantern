@@ -98,6 +98,19 @@ const baseManifest = () => ({
   damaged.files['index.html'] = Buffer.from('<p>changed</p>').toString('base64');
   let refused = false; try { packs.parsePack(damaged); } catch (e) { refused = /damaged/.test(e.message); }
   t.ok('a damaged pack is refused', refused);
+  // the binary form (a course with narration is too big for one JSON string)
+  const big = packs.buildPack(baseManifest(), { 'index.html': '<p>hi</p>', 'assets/a.mp4': Buffer.from([0, 1, 2, 250, 255]), 'img/b.png': Buffer.alloc(3000, 7) });
+  const bin = packs.serializePack(big, { binary: true });
+  t.ok('a big pack is written in the binary form', bin.subarray(0, 13).toString('latin1') === 'LANTERNPACK2 ');
+  const back = packs.parsePack(bin);
+  t.ok('…and reads back byte for byte', back.files['assets/a.mp4'].equals(Buffer.from([0, 1, 2, 250, 255])) && back.files['img/b.png'].length === 3000 && back.manifest.id === big.manifest.id);
+  t.ok('…gzipped too, as the hub stores it', packs.parsePack((await import('node:zlib')).gzipSync(bin)).files['index.html'].toString() === '<p>hi</p>');
+  const cut = Buffer.from(bin); cut[cut.length - 1] ^= 0xff;
+  let binRefused = false; try { packs.parsePack(cut); } catch (e) { binRefused = /damaged/.test(e.message); }
+  t.ok('a damaged binary pack is refused', binRefused);
+  let short = false; try { packs.parsePack(bin.subarray(0, bin.length - 10)); } catch (e) { short = /cut short|incomplete/.test(e.message); }
+  t.ok('a binary pack cut short is refused', short);
+  t.ok('a small pack stays JSON, for older copies of Lantern', packs.serializePack(pk).toString('utf8').startsWith('{"lanternPack":1'));
   let bad = false; try { packs.buildPack(Object.assign(baseManifest(), { id: 'Bad Id' }), { 'index.html': 'x' }); } catch (e) { bad = /id must be/.test(e.message); }
   t.ok('an invalid manifest is refused with a reason', bad);
   const r = packs.install(JSON.stringify(pk), { source: 'file' });
@@ -116,11 +129,25 @@ const baseManifest = () => ({
   v3.lessons = v3.lessons.filter((l) => l.id !== 'l2');
   let dropped = null; try { packs.install(JSON.stringify(packs.buildPack(v3, { 'index.html': 'x' }))); } catch (e) { dropped = e.details; }
   t.ok('a version that drops a lesson id is refused, naming it', Array.isArray(dropped) && dropped.includes('l2') && dropped.includes('l3'));
+  // a course may retire ids on purpose (manifest.retired); only the ones it names are let go
+  const v3r = Object.assign(baseManifest(), { version: '1.2.0', retired: ['l2'] });
+  v3r.units[0].lessons = v3r.units[0].lessons.filter((l) => l.id !== 'l2');
+  v3r.lessons = v3r.lessons.filter((l) => l.id !== 'l2');
+  let still = null; try { packs.install(JSON.stringify(packs.buildPack(v3r, { 'index.html': 'x' }))); } catch (e) { still = e.details; }
+  t.ok('…retiring one id does not let another go', Array.isArray(still) && still.includes('l3') && !still.includes('l2'));
+  t.ok('…and retired must be a list of ids', packs.validateManifest(Object.assign(baseManifest(), { retired: 'l2' })).some((e) => /retired/.test(e)));
   let older = false; try { packs.install(JSON.stringify(packs.buildPack(baseManifest(), { 'index.html': 'x' }))); } catch (e) { older = /newer/.test(e.message); }
   t.ok('an older version is refused', older);
   const ex = packs.exportPack('demo');
   t.ok('an installed pack exports to a valid pack file', packs.parsePack(JSON.stringify(ex)).manifest.version === '1.1.0');
   t.ok('semver: 1.10.0 > 1.9.0, and 1.0.0 > 1.0.0-beta', cmp('1.10.0', '1.9.0') > 0 && cmp('1.0.0', '1.0.0-beta') > 0);
+  // (on a course of its own, so the demo course the progress tests use is untouched)
+  packs.install(JSON.stringify(packs.buildPack(Object.assign(baseManifest(), { id: 'demo-retire' }), { 'index.html': 'x' })), { source: 'file' });
+  const v4 = Object.assign(baseManifest(), { id: 'demo-retire', version: '1.1.0', retired: ['l2'] });
+  v4.units[0].lessons = v4.units[0].lessons.filter((l) => l.id !== 'l2');
+  v4.lessons = v4.lessons.filter((l) => l.id !== 'l2');
+  const r4 = packs.install(JSON.stringify(packs.buildPack(v4, { 'index.html': 'x' })), { source: 'file' });
+  t.ok('a version that drops only the ids it retires installs', r4.version === '1.1.0');
 }
 
 /* -------------------------------------------------------------- progress */

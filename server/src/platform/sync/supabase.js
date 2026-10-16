@@ -157,7 +157,21 @@ export function supabaseAdapter(cfg, opts) {
       return jsonOf(await req('/rest/v1/rpc/' + encodeURIComponent(name), { method: 'POST', body: JSON.stringify(args || {}) }, token));
     },
 
+    // A course bigger than the hub's file limit is stored in parts: its
+    // pack_path is "<path>?parts=N" and the parts are <path>.p1 … .pN. They
+    // are fetched in order and joined (Lantern 0.1.8+).
     async download(path, token, onProgress) {
+      const m = /^(.*)\?parts=(\d+)$/.exec(String(path));
+      if (m) {
+        const bufs = [];
+        let done = 0;
+        for (let i = 1; i <= Number(m[2]); i++) {
+          const part = await this.download(m[1] + '.p' + i, token, (r, t) => { if (onProgress) onProgress(done + r, 0); });
+          done += part.length;
+          bufs.push(part);
+        }
+        return Buffer.concat(bufs);
+      }
       const r = await req('/storage/v1/object/authenticated/course-packs/' + path.split('/').map(encodeURIComponent).join('/'),
         { method: 'GET', headers: { 'content-type': undefined }, timeout: 10 * 60000 }, token);
       if (!r.ok) await jsonOf(r);

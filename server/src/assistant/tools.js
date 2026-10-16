@@ -10,6 +10,7 @@
    =========================================================================== */
 
 import * as context from './context.js';
+import * as study from './study.js';
 import * as resources from './resources.js';
 import * as progress from '../platform/progress.js';
 import { runner, exerciseByRef } from '../course/runner.js';
@@ -26,6 +27,7 @@ export const DEFS = {
   find_resources: { description: 'Free videos, articles, docs and discussions about the current lesson (or a topic), from YouTube, Crash Course, Khan Academy, Codecademy, freeCodeCamp, MDN, Wikipedia, Reddit and the course\'s docs. Shows them on screen as cards.', input_schema: obj({ topic: { type: 'string', description: 'optional: a topic instead of the current lesson' } }) },
   play_video: { description: 'Search YouTube and play the best match in the app\'s mini player (music or a video). query: what to play, e.g. "lofi study music" or "cfqueryparam tutorial".', input_schema: obj({ query: { type: 'string' } }, ['query']) },
   look_up: { description: 'Search the web and return the top results (title, link, snippet). Use for facts and current information.', input_schema: obj({ query: { type: 'string' } }, ['query']) },
+  lesson_video: { description: 'The script of a lesson video in this course: its chapters, every word the narrator says, what the board, tables and diagrams show, the recap, and its questions with their answers. With no input, the video of the lesson open now; with lesson, a lesson id (m3-l2) or any video id: m3-v2 a lesson video, m3-f4 a formula explained (why it has its form, where its constants come from), m3-e1 a worked example solved step by step, calc-5 a TI-30Xa how-to; with query, the videos that match (titles, chapters, scripts). Use it to explain a video again, to quote its numbers and steps exactly, or to point the learner to the right video and chapter.', input_schema: obj({ lesson: { type: 'string' }, query: { type: 'string' } }) },
   read_notes: { description: 'The learner\'s own notes in this course, in full. Use when they mention their notes, ask what they wrote, want to be quizzed on them or reviewed, or ask about something they may have written down. With no query, the most recently edited notes; with a query, the notes whose name or text mention it; with a title, that note.', input_schema: obj({ query: { type: 'string', description: 'optional: words to look for' }, title: { type: 'string', description: 'optional: the name of one note' } }) },
   save_note: { description: 'Write something into the learner\'s notes in the course that is open. ONLY when they ask you to write, note, jot or save something down (or agree when you offer). mode "append" (the default) adds to the note with that title, making it if needed; "new" starts a separate note. Write it in their voice, short and plain: headings with #, lists with -, maths in plain symbols.', input_schema: obj({ title: { type: 'string' }, text: { type: 'string' }, mode: { type: 'string', enum: ['append', 'new'] } }, ['title', 'text']) },
   media_control: { description: 'Control the app\'s player: pause, resume, next, previous, stop, louder, quieter, popout (open the video in their own browser at the same second).', input_schema: obj({ action: { type: 'string', enum: ['pause', 'resume', 'next', 'previous', 'stop', 'louder', 'quieter', 'popout'] } }, ['action']) },
@@ -89,6 +91,17 @@ export async function dispatch(name, input, session) {
       case 'look_up': {
         const r = await resources.generalWeb().search(String(inp.query || ''), { max: 5 });
         return ok({ query: r.query, results: r.results.map((x) => ({ title: x.title, url: x.url, snippet: x.snippet })) });
+      }
+      case 'lesson_video': {
+        const pack = context.currentPack();
+        if (!pack) return ok({ message: 'No course is open.' });
+        if (inp.query && !inp.lesson) {
+          const found = study.findVideos(pack, inp.query);
+          return ok(found.length ? { matches: found } : { message: 'No lesson video matches "' + inp.query + '".' });
+        }
+        const ref = inp.lesson || context.where().ref;
+        const v = study.videoScript(pack, ref);
+        return ok(v || { message: ref ? 'Lesson ' + ref + ' has no video.' : 'No lesson is open; give a lesson id or a query.' });
       }
       case 'read_notes': {
         const pack = context.currentPack();

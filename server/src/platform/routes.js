@@ -33,6 +33,7 @@ import * as bus from './bus.js';
 import * as local from './local.js';
 import * as eco from './eco.js';
 import * as friendsRoutes from './friends-routes.js';
+import * as phone from './phone.js';
 import { DEFAULTS } from './defaults.js';
 import * as credentials from './credentials.js';
 import { forgetShared } from '../assistant/brain.js';
@@ -188,12 +189,24 @@ export function register(r) {
   });
 
   /* --------------------------------------------------------- pack files */
-  r.get('/packs/:id/*', async ({ params, url, send }) => {
+  r.get('/packs/:id/*', async ({ req, params, url, send }) => {
     const rel = decodeURIComponent(url.pathname).replace(/^\/packs\/[^/]+\/?/, '') || null;
     const f = packs.fileFor(params.id, rel);
     if (!f) return { status: 404, body: { error: 'Not in this course.' } };
     const text = /^\.(html?|css|js|mjs|json|txt|svg)$/i.test(extname(f));
-    send(200, readFileSync(f), { 'content-type': mimeFor(f) + (text ? '; charset=utf-8' : ''), 'cache-control': 'no-cache' });
+    const type = mimeFor(f) + (text ? '; charset=utf-8' : '');
+    const data = readFileSync(f);
+    // Audio and video answer byte ranges: Safari on an iPhone will not play or
+    // seek a lesson's narration without them.
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String((req && req.headers.range) || '').trim());
+    if (range && !text) {
+      const size = data.length;
+      let start = range[1] === '' ? size - Number(range[2]) : Number(range[1]);
+      let end = range[1] === '' || range[2] === '' ? size - 1 : Math.min(Number(range[2]), size - 1);
+      if (!(start >= 0 && start <= end && start < size)) return send(416, '', { 'content-range': 'bytes */' + size });
+      return send(206, data.subarray(start, end + 1), { 'content-type': type, 'content-range': `bytes ${start}-${end}/${size}`, 'accept-ranges': 'bytes', 'cache-control': 'no-cache' });
+    }
+    send(200, data, { 'content-type': type, 'cache-control': 'no-cache', 'accept-ranges': text ? 'none' : 'bytes' });
   });
 
   r.post('/api/packs/import', async ({ body }) => {
@@ -201,12 +214,12 @@ export function register(r) {
     bus.emit('courses', {});
     if (out.changed) bus.emit('course-updated', { course: out.id, title: packs.get(out.id).title, from: out.previous, to: out.version });
     return { status: 201, body: out };
-  }, { maxBody: 200 * 1024 * 1024 });
+  }, { maxBody: 1024 * 1024 * 1024 });
 
   r.get('/api/packs/:id/export', async ({ params, send }) => {
     if (!engine.isOwner() && config.mode() !== 'demo') return { status: 403, body: { error: 'Only the owner can export a course.' } };
     const pk = packs.exportPack(params.id);
-    send(200, JSON.stringify(pk), { 'content-type': 'application/json', 'content-disposition': 'attachment; filename="' + params.id + '-' + pk.manifest.version + '.lpack"' });
+    send(200, packs.serializePack(pk), { 'content-type': 'application/octet-stream', 'content-disposition': 'attachment; filename="' + params.id + '-' + pk.manifest.version + '.lpack"' });
   });
 
   /* ----------------------------------------------------------------- hub */
@@ -275,6 +288,17 @@ export function register(r) {
   /* ------------------------------------------------------------- backups */
   r.get('/api/backups', async () => ({ body: { dir: config.paths.backups(), backups: backups.list() } }));
   r.post('/api/backups', async () => ({ status: 201, body: { file: backups.backupDb(dbHandle(), 'manual', { file: dbFile() }) } }));
+
+  /* ---------------------------------------------- phone (Tailscale) ---
+     Settings → Phone. Switching it on or off is done from this computer only,
+     never from the phone itself. docs/dev/phone.md */
+  const onThisPc = (req) => !phone.isRemote(req);
+  r.get('/api/phone', async ({ req }) => ({ body: Object.assign(await phone.status(), { remote: phone.isRemote(req) }) }));
+  r.put('/api/phone', async ({ req, body }) => {
+    if (!onThisPc(req)) return { status: 403, body: { error: 'Phone access is switched on or off at the computer.' } };
+    const out = body && body.enabled ? await phone.enable() : await phone.disable();
+    return { status: out.ok ? 200 : 409, body: out };
+  });
 
   /* --------------------------------------------------- settings: basics */
   r.get('/api/settings', async () => ({ body: {

@@ -148,6 +148,7 @@ const MIME = {
   ppt: 'application/vnd.ms-powerpoint',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   mp3: 'audio/mpeg', mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+  m4a: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav',
   ttf: 'font/ttf', woff: 'font/woff', woff2: 'font/woff2',
 };
 export const mimeFor = (name) => MIME[extOf(name)] || 'application/octet-stream';

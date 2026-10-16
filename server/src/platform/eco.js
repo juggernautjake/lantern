@@ -35,6 +35,7 @@
 
 import { join } from 'node:path';
 import * as bus from './bus.js';
+import { remoteOk } from './phone.js';
 import { dataDir, version, port as ourPort } from './config.js';
 import { createEco, EVENT_TYPES as CORE_TYPES, SCHEMA as CORE_SCHEMA, validateEvent as coreValidate, ecoDir as coreEcoDir } from '../../../vendor/ecosystem-core/lib/eco.mjs';
 
@@ -76,6 +77,8 @@ export async function send(type, data, only) {
 
 /* Called for EVERY request. Returns null when fine, or { status, error }. */
 export function guard(req, opts) {
+  // the owner's phone, through Tailscale (platform/phone.js says exactly when)
+  if (remoteOk(req)) return null;
   const g = core.guard(req, { port: (opts && opts.port) || ourPort() });
   if (g && g.status === 421) return { status: 421, error: 'This address is not Lantern on this computer.' };
   if (g && g.status === 403) return { status: 403, error: 'Requests from other websites are not allowed.' };

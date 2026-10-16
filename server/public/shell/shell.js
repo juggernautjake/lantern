@@ -148,7 +148,18 @@
     if (stored('lantern.shell.contrast') === 'high') H.setAttribute('data-contrast', 'high'); else H.removeAttribute('data-contrast');
     const m = stored('lantern.shell.motion');
     if (m) H.setAttribute('data-motion', m); else H.removeAttribute('data-motion');
+    // a phone's status bar (and an installed app's title bar) wears the bar's colour
+    const bar = getComputedStyle(H).getPropertyValue('--surface').trim();
+    if (bar) document.querySelectorAll('meta[name=theme-color]').forEach((x) => { x.setAttribute('content', bar); x.removeAttribute('media'); });
   }
+
+  /* ---------------------------------------------------------------- phone */
+  // The same query as the phone rules in shell.css and assistant.css.
+  const PHONE_Q = '(max-width: 720px), (max-height: 500px) and (max-width: 1000px)';
+  const phoneMq = window.matchMedia ? window.matchMedia(PHONE_Q) : null;
+  const isPhone = () => !!(phoneMq && phoneMq.matches);
+  // Opened on the owner's phone through Tailscale (docs/dev/phone.md); tests set __lanternRemote.
+  const isRemote = () => /\.ts\.net$/i.test(location.hostname) || !!window.__lanternRemote;
   applyPalette();
   if (systemLight && systemLight.addEventListener) systemLight.addEventListener('change', applyPalette);
 
@@ -308,7 +319,7 @@
     if (parts[0] === 'course' && parts[1]) return { name: 'course', id: parts[1], q };
     if (parts[0] === 'learn' && parts[1]) return { name: 'learn', id: parts[1], open: q.get('open') };
     if (parts[0] === 'whats-new') return { name: 'whats-new' };
-    if (parts[0] === 'settings') return { name: 'settings', section: parts[1] || 'account' };
+    if (parts[0] === 'settings') return { name: 'settings', section: parts[1] || 'account', explicit: !!parts[1] };
     if (parts[0] === 'owner') return { name: 'owner', tab: parts[1] || 'people' };
     if (pages[parts[0]]) return { name: parts[0], sub: parts[1] || null, q };
     return { name: 'home' };
@@ -333,7 +344,7 @@
       else if (r.name === 'course') await renderCourse(main, r.id);
       else if (r.name === 'learn') await renderPlayer(main, r.id, r.open, alive);
       else if (r.name === 'whats-new') await renderWhatsNew(main);
-      else if (r.name === 'settings') await renderSettings(main, r.section);
+      else if (r.name === 'settings') await renderSettings(main, r.section, r.explicit);
       else if (r.name === 'owner') await renderOwner(main, r.tab);
       else if (pages[r.name]) await pages[r.name](main, r);
       show();
@@ -485,7 +496,7 @@
     main.innerHTML = '';
     const go = (ref) => { location.hash = '#/learn/' + encodeURIComponent(id) + (ref ? '?open=' + encodeURIComponent(ref) : ''); };
     const target = ov.continue || ov.next;
-    main.appendChild(el('a', { href: '#/', class: 'muted', text: '← Your courses' }));
+    main.appendChild(el('a', { href: '#/', class: 'muted back-link', text: '← Your courses' }));
     main.appendChild(el('h1', { text: ov.title, 'data-testid': 'overview-title' }));
     if (ov.description) main.appendChild(el('p', { class: 'lede', text: ov.description }));
     main.appendChild(el('div', { class: 'ov-head' }, [
@@ -612,12 +623,16 @@
     main.innerHTML = '';
     const pctEl = el('span', { class: 'muted', 'data-testid': 'player-percent' });
     // ?host=lantern: the course knows the app is around it, and leaves the header to the app
-    const frame = el('iframe', { title: st.title, src: '/packs/' + encodeURIComponent(id) + '/' + (st.entry || 'index.html') + '?host=lantern', 'data-testid': 'player-frame', allow: 'clipboard-write' });
-    const railBtn = el('button', { class: 'btn quiet', type: 'button', 'data-testid': 'lessons-btn', title: 'Show or hide the list of lessons', 'aria-label': 'Lessons' }, '☰ Lessons');
+    const frame = el('iframe', { title: st.title, src: '/packs/' + encodeURIComponent(id) + '/' + (st.entry || 'index.html') + '?host=lantern', 'data-testid': 'player-frame', allow: 'clipboard-write; fullscreen; autoplay', allowfullscreen: '' });
+    // On a phone this bar is the only header: the words shrink to their icons
+    // and Lantern gets a button here (shell.css, the phone rules).
+    const railBtn = el('button', { class: 'btn quiet', type: 'button', 'data-testid': 'lessons-btn', title: 'Show or hide the list of lessons', 'aria-label': 'Lessons' }, [el('span', { class: 'pb-ic', 'aria-hidden': 'true', text: '☰' }), el('span', { class: 'pb-lbl', text: 'Lessons' })]);
     railBtn.addEventListener('click', () => { try { frame.contentWindow.postMessage({ lantern: 'rail' }, location.origin); } catch (e) { /* closed */ } });
+    const lanternBtn = el('button', { class: 'btn quiet pb-lantern', type: 'button', 'data-testid': 'player-lantern', title: 'Ask Lantern', 'aria-label': 'Ask Lantern' }, el('span', { class: 'mini-flame', 'aria-hidden': 'true' }));
+    lanternBtn.addEventListener('click', () => { const b = $('#assistant-btn'); if (b) b.click(); });
     main.appendChild(el('div', { class: 'player' }, [
-      el('div', { class: 'player-bar' }, [el('a', { class: 'btn quiet', href: '#/course/' + encodeURIComponent(id) }, '← Overview'), railBtn, el('span', { class: 't', text: st.title }), pctEl,
-        el('button', { class: 'btn quiet', type: 'button', 'data-testid': 'resources-btn', title: 'Videos, articles and docs about this lesson', onclick: () => window.dispatchEvent(new CustomEvent('lantern:resources')) }, 'Resources')]),
+      el('div', { class: 'player-bar' }, [el('a', { class: 'btn quiet', href: '#/course/' + encodeURIComponent(id), 'data-testid': 'player-back', 'aria-label': 'Back to the course overview' }, [el('span', { class: 'pb-ic', 'aria-hidden': 'true', text: '←' }), el('span', { class: 'pb-lbl', text: 'Overview' })]), railBtn, el('span', { class: 't', text: st.title }), pctEl,
+        el('button', { class: 'btn quiet', type: 'button', 'data-testid': 'resources-btn', title: 'Videos, articles and docs about this lesson', onclick: () => window.dispatchEvent(new CustomEvent('lantern:resources')) }, 'Resources'), lanternBtn]),
       frame,
     ]));
     let timer = null, saveWarned = false;
@@ -665,7 +680,9 @@
         if (here && /[?&]open=/.test(location.hash) && route().open !== here) {
           try { history.replaceState(history.state, '', '#/learn/' + encodeURIComponent(id)); } catch (err) { /* kept as it was */ }
         }
-        reportHere({ course: id, ref: String(e.data.id || '') || null, kind: e.data.kind || null, title: e.data.title || null, module: e.data.module || null, text: typeof e.data.text === 'string' ? e.data.text.slice(0, 12000) : null }); return; }
+        reportHere({ course: id, ref: String(e.data.id || '') || null, kind: e.data.kind || null, title: e.data.title || null, module: e.data.module || null, text: typeof e.data.text === 'string' ? e.data.text.slice(0, 24000) : null }); return; }
+      // a lesson video went full screen inside the course: the course frame takes the whole screen
+      if (e.data.lantern === 'stage') { document.documentElement.classList.toggle('course-stage', !!e.data.full); return; }
       if (e.data.lantern === 'results' && e.data.report && typeof e.data.report === 'object') {
         // A quiz ended: Lantern reviews it, and the review goes back to the page.
         const report = e.data.report;
@@ -673,6 +690,18 @@
         const A = window.LanternAssistant;
         const run = A && A.reviewResults ? A.reviewResults(id, report) : api('/api/assistant/review', { method: 'POST', body: { course: id, report } });
         Promise.resolve(run).then((r) => back(r ? { text: r.text, videos: r.videos || [], via: r.via } : null)).catch(() => back(null));
+        return;
+      }
+      if (e.data.lantern === 'plan-request' && typeof e.data.id === 'string') {
+        // Study sessions: Lantern's take on what to work on
+        const reply = (text) => { try { frame.contentWindow.postMessage({ lantern: 'plan', id: e.data.id, text }, location.origin); } catch (err) { /* closed */ } };
+        api('/api/assistant/plan', { method: 'POST', body: { course: id, topics: Array.isArray(e.data.topics) ? e.data.topics.slice(0, 12) : [] } }).then((r) => reply(r && r.text), () => reply(null));
+        return;
+      }
+      if (e.data.lantern === 'ask' && typeof e.data.text === 'string' && window.LanternAssistant) {
+        // "Explain it another way" from a lesson: the learner's own request, sent as if typed
+        window.dispatchEvent(new CustomEvent('lantern:show-assistant'));
+        window.LanternAssistant.send(e.data.text.slice(0, 1500));
         return;
       }
       if (e.data.lantern === 'play' && Array.isArray(e.data.queue) && window.LanternAssistant) {
@@ -691,6 +720,9 @@
     frame.addEventListener('load', () => {
       api('/api/prefs').then((p) => { if (p && (p.editor || p.appearance)) pushPrefs(p); }).catch(() => {});
       try { ['pointerdown', 'keydown'].forEach((t) => frame.contentWindow.document.addEventListener(t, activity, { passive: true })); } catch (e) { /* not ours */ }
+      // A tap inside the course counts as the tap that lets Lantern's voice play
+      // on a phone (iOS starts audio only from one).
+      try { ['touchend', 'click', 'keydown'].forEach((t) => frame.contentWindow.document.addEventListener(t, () => { const A = window.LanternAssistant; if (A && A.unlock) A.unlock(); }, { passive: true, capture: true })); } catch (e) { /* not ours */ }
     });
     S.playing = { id, frame, close: async () => { window.removeEventListener('storage', onStorage); window.removeEventListener('pagehide', onHide); window.removeEventListener('message', onMsg); S.listeners.prefs = (S.listeners.prefs || []).filter((f) => f !== offPrefs); if (timer) await save(); } };
     api('/api/activity', { method: 'POST', body: { course: id, lesson: openRef || null, status: 'studying' } }).catch(() => {});
@@ -729,8 +761,24 @@
   /* ------------------------------------------------------------ settings */
   function registerSettings(section) { settingsSections.push(section); settingsSections.sort((a, b) => (a.order || 50) - (b.order || 50)); }
 
-  async function renderSettings(main, sectionId) {
+  async function renderSettings(main, sectionId, explicit) {
     main.innerHTML = '';
+    if (isPhone()) {
+      // A phone: the list of sections first, then one section with a way back
+      // (an app added to the home screen has no browser Back button).
+      if (!explicit) {
+        main.appendChild(el('h1', { text: 'Settings' }));
+        main.appendChild(el('ul', { class: 'settings-list', 'aria-label': 'Settings sections' }, settingsSections.map((s) => el('li', {}, el('a', { href: '#/settings/' + s.id, text: s.title })))));
+        return;
+      }
+      const sec = settingsSections.find((s) => s.id === sectionId) || settingsSections[0];
+      const body = el('section', {});
+      main.appendChild(el('a', { class: 'settings-back', href: '#/settings', text: '‹ Settings' }));
+      main.appendChild(el('div', { class: 'settings' }, [body]));
+      body.appendChild(el('h1', { text: sec.title }));
+      await sec.render(body);
+      return;
+    }
     main.appendChild(el('h1', { text: 'Settings' }));
     const nav = el('nav', { 'aria-label': 'Settings sections' });
     const body = el('section', {});
@@ -838,6 +886,74 @@
     box.appendChild(form);
     box.appendChild(el('p', { class: 'muted', text: 'Before any update, your data is backed up. If an update fails, Lantern puts everything back as it was.' }));
     box.appendChild(el('button', { class: 'btn', onclick: async () => { try { const r = await api('/api/updates/check', { method: 'POST' }); toast(r.available ? 'Lantern ' + r.latest + ' is available.' : 'Lantern is up to date.'); refreshPlatform(); } catch (e) { toast(e.message); } } }, 'Check now'));
+  } });
+
+  // Phone: Lantern on the owner's iPhone, through Tailscale (docs/dev/phone.md,
+  // server/src/platform/phone.js). Switched on and off only from this computer.
+  registerSettings({ id: 'phone', title: 'Phone', order: 25, render: async (box) => {
+    const sec = el('div', { class: 'phone-sec', 'data-testid': 'phone-section' });
+    box.appendChild(sec);
+    const remote = isRemote();
+    let s;
+    try { s = await api('/api/phone'); }
+    catch (e) { sec.appendChild(el('p', { class: 'err', text: 'Lantern could not check phone access just now: ' + e.message })); return; }
+    sec.appendChild(el('p', { class: 'lede', text: 'Open Lantern on your iPhone, wherever you are, while this computer is on. It goes through Tailscale, a private network between your own devices, so nothing is opened to the internet.' }));
+
+    const line = (ok, label, value, extra) => el('li', { class: 'ph-line' }, [el('span', { class: 'dot ' + (ok ? 'on' : ok === false ? 'off' : '') }), el('span', { class: 'ph-k', text: label }), el('span', { class: 'ph-v' }, [value, extra || null])]);
+    const state = el('ul', { class: 'ph-state card', 'data-testid': 'phone-state' }, [
+      line(s.installed, 'Tailscale on this computer', s.installed ? 'Installed' : 'Not installed', s.installed ? null : el('a', { href: 'https://tailscale.com/download', target: '_blank', rel: 'noopener noreferrer', text: ' Get Tailscale' })),
+      line(s.installed ? !!s.signedIn : null, 'Signed in', s.signedIn ? (s.login || 'Yes') : s.installed ? 'Not yet: open Tailscale and sign in' : '—'),
+      line(s.enabled ? !!s.serving : null, 'Phone access', s.enabled ? (s.serving ? 'On' : 'On, but Tailscale is not serving Lantern') : 'Off'),
+    ]);
+    sec.appendChild(state);
+    if (s.problem) sec.appendChild(el('p', { class: 'muted', text: 'Tailscale says: ' + s.problem }));
+    if (s.enabled && !s.serving && !remote) sec.appendChild(el('p', { class: 'muted', text: 'Switch it off and on again to have Tailscale serve Lantern.' }));
+
+    if (remote) sec.appendChild(el('p', { class: 'muted ph-readonly', 'data-testid': 'phone-readonly', text: 'You are using Lantern on your phone now. Phone access is switched on and off from the computer.' }));
+    else {
+      const msg = el('p', { class: 'muted', 'aria-live': 'polite' });
+      const can = s.enabled || (s.installed && s.signedIn);
+      sec.appendChild(el('div', { class: 'row' }, [el('button', { class: 'btn ' + (s.enabled ? '' : 'primary'), type: 'button', 'data-testid': 'phone-toggle', disabled: can ? null : true, onclick: async () => {
+        msg.className = 'muted'; msg.textContent = s.enabled ? 'Switching off…' : 'Switching on… (this can take a few seconds)';
+        try {
+          const r = await api('/api/phone', { method: 'PUT', body: { enabled: !s.enabled } });
+          if (r && r.ok === false) { msg.className = 'err'; msg.textContent = r.error || 'That did not work.'; return; }
+          render();
+        } catch (e) { msg.className = 'err'; msg.textContent = e.message; }
+      } }, s.enabled ? 'Switch off' : 'Switch on'), can ? null : el('span', { class: 'muted', text: s.installed ? 'Sign in to Tailscale on this computer first.' : 'Install Tailscale on this computer first.' })]));
+      sec.appendChild(msg);
+    }
+
+    if (s.enabled && s.url) {
+      const url = s.url;
+      const copy = el('button', { class: 'btn', type: 'button', 'data-testid': 'phone-copy', onclick: async () => {
+        let ok = false;
+        try { await navigator.clipboard.writeText(url); ok = true; } catch (e) {
+          try { const t = el('textarea', { style: 'position:fixed;opacity:0' }); t.value = url; document.body.appendChild(t); t.select(); ok = document.execCommand('copy'); t.remove(); } catch (x) { ok = false; }
+        }
+        toast(ok ? 'Copied the address.' : 'Your phone address is ' + url);
+      } }, 'Copy');
+      let qr = null;
+      try { qr = el('div', { class: 'ph-qr', 'data-testid': 'phone-qr', html: window.LanternQR.svg(url, { label: 'QR code for ' + url }) }); } catch (e) { qr = null; }
+      sec.appendChild(el('section', { class: 'card ph-addr' }, [
+        el('div', { class: 'ph-addr-text' }, [
+          el('h3', { text: 'Your phone address' }),
+          el('a', { class: 'ph-url', href: url, target: '_blank', rel: 'noopener noreferrer', 'data-testid': 'phone-url', text: url.replace(/\/$/, '') }),
+          el('div', { class: 'row' }, [copy]),
+          qr ? el('p', { class: 'muted', text: remote ? 'This is the address you are using now.' : 'Point your iPhone’s camera at the code to open it.' }) : null,
+        ]),
+        qr,
+      ]));
+    }
+
+    sec.appendChild(el('h3', { text: 'Set up your iPhone' }));
+    sec.appendChild(el('ol', { class: 'ph-steps', 'data-testid': 'phone-steps' }, [
+      el('li', {}, [el('b', { text: 'Install Tailscale' }), ' on your iPhone from the App Store.']),
+      el('li', {}, [el('b', { text: 'Sign in' }), ' with the same account' + (s.login ? ' (' + s.login + ')' : '') + '.']),
+      el('li', {}, [el('b', { text: 'Open this address in Safari' }), s.enabled && s.url ? ': ' + s.url.replace(/\/$/, '') + '.' : ' (it appears here when phone access is on).']),
+      el('li', {}, [el('b', { text: 'Share → Add to Home Screen' }), ', and Lantern opens like an app.']),
+    ]));
+    sec.appendChild(el('p', { class: 'muted', text: 'It works while this computer is on and Lantern is running. Only the Tailscale account above can open it.' }));
   } });
 
   // General
@@ -1030,7 +1146,7 @@
 
   /* ---------------------------------------------------------------- seams */
   window.LanternShell = {
-    version: 2, api, el, toast, on, fire, registerSettings, md, ask, measure,
+    version: 2, api, el, toast, on, fire, registerSettings, md, ask, measure, isPhone, isRemote, PHONE_Q,
     here: () => Object.assign({}, S.here),
     route: () => route(),
     render: () => render(),
@@ -1056,7 +1172,10 @@
   const fitBar = () => { const b = $('.bar'); if (b) document.documentElement.style.setProperty('--shell-bar', b.offsetHeight + 'px'); };
   fitBar();
   if (window.ResizeObserver) new ResizeObserver(fitBar).observe($('.bar')); else window.addEventListener('resize', fitBar);
-  window.addEventListener('hashchange', render);
+  // leaving a page always gives the screen back (a course's full-screen video asked for it)
+  window.addEventListener('hashchange', () => { document.documentElement.classList.remove('course-stage'); render(); });
+  // turning between a phone layout and a wide one: Settings changes shape
+  if (phoneMq && phoneMq.addEventListener) phoneMq.addEventListener('change', () => { if (route().name === 'settings') render(); });
   (async () => {
     await refreshPlatform();
     const rec = S.platform && S.platform.recovered;

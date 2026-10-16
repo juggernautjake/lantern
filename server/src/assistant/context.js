@@ -24,6 +24,7 @@ import * as engine from '../platform/sync/engine.js';
 import * as settings from '../platform/settings.js';
 import { learningContext } from '../platform/routes.js';
 import { summary as quizSummary } from './review.js';
+import * as study from './study.js';
 
 /* ---------------------------------------------------------------- where --- */
 
@@ -34,7 +35,7 @@ let here = { course: null, ref: null, kind: null, title: null, module: null, tex
 const cap = (s, n) => (typeof s === 'string' && s.trim() ? s.slice(0, n) : null);
 export function setHere(h) {
   const kind = h.kind || null;
-  const text = /check|exam|quiz|test|exercise/i.test(String(kind || '')) ? null : cap(h.text, 12000);
+  const text = /check|exam|quiz|test|exercise/i.test(String(kind || '')) ? null : cap(h.text, 24000);
   here = { course: h.course || null, ref: h.ref || null, kind, title: h.title || null, module: cap(h.module, 200), text, at: Date.now() };
   return here;
 }
@@ -205,6 +206,8 @@ export function describe(uid, courseId, ref) {
     reading: !ref || ref === here.ref ? reading(pack.id) : null,
     quizzes: quizSummary(uid, pack.id),
     notes: notesIndex(uid, pack),
+    notation: study.notation(pack),
+    video: (() => { const v = study.videoScript(pack, at); return v ? { id: v.id, title: v.title, chapters: v.chapters } : null; })(),
     where: Object.assign(where(), { text: undefined }),
   };
 }

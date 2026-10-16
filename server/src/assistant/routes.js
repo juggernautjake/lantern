@@ -16,6 +16,7 @@
      GET  /api/assistant/mic          may Lantern listen for its wake word now?
      POST /api/assistant/resources    { topic?, refresh? } → the resource finder
      POST /api/assistant/play         { query } → YouTube results to play
+     POST /api/assistant/plan         { course, topics } → { text }: what to work on in a study session
      POST /api/assistant/review       { course, report } → Lantern's review of a
                                       finished check, practice set or mock exam:
                                       { id, text, speak, videos, via } (review.js)
@@ -27,6 +28,7 @@ import * as chatMod from './chat.js';
 import * as context from './context.js';
 import * as resources from './resources.js';
 import * as reviewMod from './review.js';
+import * as studyMod from './study.js';
 import * as settings from '../platform/settings.js';
 import * as eco from '../platform/eco.js';
 import * as bus from '../platform/bus.js';
@@ -101,7 +103,8 @@ export function register(r) {
   r.post('/api/assistant/chat', async ({ body }) => ({ body: await chatMod.chat({ text: body && body.text }) }));
 
   r.post('/api/assistant/tts', async ({ body, send }) => {
-    const text = spoken(String((body && body.text) || '').slice(0, 4000)).slice(0, 2500);   // the page does this too; twice is harmless
+    const said = studyMod.pronounce(context.currentPack(), String((body && body.text) || '').slice(0, 4000));
+    const text = spoken(said).slice(0, 2500);   // the page sends the reply as written: pronunciations, then words
     if (!text.trim()) return { status: 400, body: { error: 'Nothing to say.' } };
     try {
       const buf = await brain.voice().tts(text, { voice: body && body.voice ? String(body.voice) : undefined });
@@ -111,6 +114,9 @@ export function register(r) {
       return { status: e.status && e.status >= 400 ? e.status : 502, body: { error: e.message, fallback: 'browser' } };
     }
   }, { maxBody: 64 * 1024 });
+
+  // the current course's pronunciations, for the browser's own voice (the page applies them itself)
+  r.get('/api/assistant/pronounce', async () => ({ body: { words: studyMod.pronounceWords ? studyMod.pronounceWords(context.currentPack()) : {} } }));
 
   r.get('/api/assistant/voice', async () => { await brain.voice().loadLibrary().catch(() => {}); return { body: brain.voiceStatus() }; });
   r.put('/api/assistant/voice', async ({ body }) => ({ body: brain.saveVoice(body) }));
@@ -159,6 +165,12 @@ export function register(r) {
     const report = Object.assign({}, b.report, { course: pack ? pack.id : null });
     return { body: await reviewMod.review(report, { uid, ctx, res: pack ? context.resourcesOf(pack) : null }) };
   }, { maxBody: 256 * 1024 });
+  // Study sessions: Lantern's take on what to work on, from the learner's topic record.
+  r.post('/api/assistant/plan', async ({ body }) => {
+    const b = body || {};
+    const pack = context.currentPack(typeof b.course === 'string' ? b.course : null);
+    return { body: await studyMod.plan(Object.assign({}, b, { course: pack ? pack.id : null }), { uid: local.userId() }) };
+  }, { maxBody: 64 * 1024 });
   r.post('/api/assistant/play', async ({ body }) => {
     const list = await resources.playable(String((body && body.query) || 'focus')).catch(() => []);
     return { body: { queue: list.map((v) => ({ videoId: v.videoId, title: v.title, source: v.source, thumbnail: v.thumbnail })) } };

@@ -2,9 +2,19 @@
 <html lang="en" data-brand="lantern">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Lantern</title>
 <link rel="icon" href="/shell/lantern.svg" type="image/svg+xml">
+<!-- On a phone: Add to Home Screen opens Lantern full-screen, with its own icon (docs/dev/phone.md). -->
+<link rel="manifest" href="/shell/manifest.json">
+<link rel="apple-touch-icon" href="/shell/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lantern">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#fffaf0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#231a12" media="(prefers-color-scheme: dark)">
 <!-- The shared ecosystem look (ecosystem-core, vendored): colours, type, shapes. -->
 <link rel="stylesheet" href="/app/theme/fonts.css">
 <link rel="stylesheet" href="/eco/client/tokens.css">
@@ -17,12 +27,13 @@
 <div id="banner-slot"></div>
 <header class="bar">
   <a class="brand" href="#/"><span class="flame" aria-hidden="true"></span> Lantern</a>
+  <!-- A menu along the top on a computer; a tab bar along the bottom on a phone (the icons show only there). -->
   <nav aria-label="Main">
-    <a href="#/" data-nav="home">Courses</a>
-    <a href="#/friends" data-nav="friends" id="nav-friends">Friends <span class="badge" id="friends-badge" data-testid="friends-badge" hidden></span></a>
-    <a href="#/whats-new" data-nav="whats-new">What’s new</a>
-    <a href="#/owner" data-nav="owner" id="nav-owner" hidden>Owner</a>
-    <a href="#/settings" data-nav="settings">Settings</a>
+    <a href="#/" data-nav="home"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/></svg><span class="tl">Courses</span></a>
+    <a href="#/friends" data-nav="friends" id="nav-friends"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16.5 14.6c2.3.2 4 1.6 4.5 4.4"/></svg><span class="tl">Friends</span> <span class="badge" id="friends-badge" data-testid="friends-badge" hidden></span></a>
+    <a href="#/whats-new" data-nav="whats-new"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 4.6L19 9.5l-5.1 1.9L12 16l-1.9-4.6L5 9.5l5.1-1.9z"/><path d="M18.5 15.5l.8 1.9 1.7.6-1.7.7-.8 1.8-.7-1.8-1.8-.7 1.8-.6z"/></svg><span class="tl">What’s new</span></a>
+    <a href="#/owner" data-nav="owner" id="nav-owner" hidden><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5.5c0 4.2-3 7.7-7 9-4-1.3-7-4.8-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span class="tl">Owner</span></a>
+    <a href="#/settings" data-nav="settings"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.5-2-3.4-2.3 1a7.5 7.5 0 0 0-2.6-1.5L14.2 2.6h-4l-.4 2.5a7.5 7.5 0 0 0-2.6 1.5l-2.3-1-2 3.4 2 1.5a7.6 7.6 0 0 0 0 3l-2 1.5 2 3.4 2.3-1a7.5 7.5 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.5 7.5 0 0 0 2.6-1.5l2.3 1 2-3.4z"/></svg><span class="tl">Settings</span></a>
   </nav>
   <span class="grow"></span>
   <span class="pill" id="eco-pill" hidden title="Dayspring is running on this computer"><span class="dot on"></span> Dayspring</span>
@@ -36,6 +47,7 @@
 </div>
 <div id="media-slot"></div>
 <div id="toasts" role="status" aria-live="polite"></div>
+<script src="/shell/qr.js"></script>
 <script src="/shell/shell.js"></script>
 <script src="/shell/friends.js"></script>
 <!-- The assistant (the lantern), its voice, the sound panel and the mini player. -->
