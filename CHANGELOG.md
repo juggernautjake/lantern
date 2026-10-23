@@ -1,5 +1,12 @@
 # What's new
 
+## 0.2.0
+
+- **The assistant teaches with the course.** Ask about any term, symbol, equation, figure, code or standard: it answers first, then points you to the video (starting at the right chapter) or the lesson that covers it. When a picture helps, it shows the course's own figure, demonstration or equation card and highlights each part as it explains, or draws a simple sketch for a question the course has no figure for. Worked examples use numbers the course computes, never guesses.
+- **Course questions only.** The assistant sticks to what the course covers and says so when asked about something else.
+- **Math said and shown clearly.** Bearings, stations, symbols and equations are read aloud the way the lessons say them, and shown with proper subscripts and symbols.
+- **FS Exam Prep 1.3.0:** a CBT-faithful mock exam, every video narrated, a reviewed question bank, acronyms and datums, and terms in context. See the course's own notes.
+
 ## 0.1.9
 
 - **Lantern's voice is back for courses with their own pronunciations.** In 0.1.8, Lantern fell back to the computer's own voice in FS Exam Prep instead of using ElevenLabs. It speaks with its own voice again, saying the course's terms the way the lessons do.

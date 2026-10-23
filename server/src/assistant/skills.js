@@ -20,7 +20,9 @@
 import * as context from './context.js';
 import * as resources from './resources.js';
 import * as progress from '../platform/progress.js';
-import { openTarget, gradeHere } from './tools.js';
+import { openTarget, gradeHere, findResources, courseVideoAction } from './tools.js';
+import * as knowledge from './knowledge.js';
+import * as catalogue from './catalogue.js';
 
 const clean = (t) => String(t || '').toLowerCase().replace(/[’']/g, "'").replace(/[.!?,]+$/g, '').replace(/^(hey |ok |okay |hi )?(lantern[,]?\s+)?/, '').replace(/^(please |can you |could you |would you )+/, '').replace(/ please$/, '').trim();
 
@@ -85,8 +87,26 @@ export async function handle(text, S, opts) {
   if ((m = /\b(?:find|show|get|recommend|give)(?: me)? (?:a |an |some |more |good |other )*(?:videos?|articles?|resources?|tutorials?|reading|links?|material)(?: (?:about|on|for|explaining) (.{2,100}))?$/.exec(q)) || /^resources( for this( lesson)?)?$/.test(q)) {
     const topic = m && m[1] && !/^(this|it|that|this lesson|the lesson|this topic)$/.test(m[1]) ? m[1] : null;
     const pack = context.currentPack();
+    // a course that ships its videos' index: "a video on X" is answered with the
+    // course's own video for X (it plays right here) and its checked outside
+    // videos, at once and without an AI
+    if (pack && knowledge.has(pack) && /videos?|tutorials?/.test(q) && !/^resources/.test(q)) {
+      const w = context.where();
+      const ref = w.course === pack.id ? w.ref : null;
+      const about = topic || w.title || '';
+      const mine = knowledge.findVideos(pack, about, { ref: topic ? null : ref, limit: 2 });
+      const theirs = catalogue.match(pack, { topic: topic || '', ref: topic ? null : ref, limit: 3 });
+      if (mine.length || theirs.length) {
+        const acts = mine.map((v) => courseVideoAction(pack, v.id, v.chapter && topic ? v.chapter.t : 0)).filter(Boolean);
+        if (theirs.length) acts.push({ type: 'outside-videos', course: pack.id, items: theirs });
+        const what = topic ? ' on ' + topic : '';
+        const reply = (mine.length ? 'Here is the course’s own video' + what + (mine.length > 1 ? ', and another' : '') + ': press Play to watch it here, or Open lesson to go to it.' : 'The course has no video' + what + ' of its own.')
+          + (theirs.length ? ' And ' + theirs.length + ' free video' + (theirs.length === 1 ? '' : 's') + ' from ' + [...new Set(theirs.map((x) => (x.provider === 'khan' ? 'Khan Academy' : 'YouTube')))].join(' and ') + ', checked, that open in your browser.' : '');
+        return { reply, actions: acts };
+      }
+    }
     const d = context.describe(S.uid);
-    const r = await resources.find(d, pack ? context.resourcesOf(pack) : null, { topic });
+    const r = await findResources(pack, d, pack ? context.resourcesOf(pack) : null, { topic });
     const vids = r.online.filter((x) => x.type === 'video').length;
     const reply = r.message ? r.message : (r.online.length ? 'Here is what I found about ' + r.topic + ': ' + vids + ' video' + (vids === 1 ? '' : 's') + ' and ' + (r.online.length - vids) + ' things to read.' : 'I did not find anything new about ' + r.topic + '. The docs are on the right.');
     return { reply, actions: [{ type: 'resources', topic: r.topic, offline: r.offline, online: r.online, message: r.message || null, fromCache: !!r.fromCache }] };

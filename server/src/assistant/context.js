@@ -25,6 +25,7 @@ import * as settings from '../platform/settings.js';
 import { learningContext } from '../platform/routes.js';
 import { summary as quizSummary } from './review.js';
 import * as study from './study.js';
+import * as knowledge from './knowledge.js';
 
 /* ---------------------------------------------------------------- where --- */
 
@@ -44,6 +45,65 @@ export const where = () => Object.assign({}, here);
 export function reading(courseId) {
   if (!here.text || (courseId && here.course !== courseId)) return null;
   return { title: here.title, module: here.module, text: here.text };
+}
+
+/* ------------------------------------------------------------ the look --- */
+
+/* What is on the learner's screen when they asked (app/course/host.js, sent
+   by the panel with the message): the page, the part of the reading in view,
+   the video and its second, the question in front of them, the open panels,
+   the flashcard, and the course's own ranking of their topics. Cut to size
+   and to shape here, whatever the page sent. On a check or an exam the
+   question's wording is dropped again, as a second guard behind the page's. */
+let look = null;
+const s = (v, n) => (typeof v === 'string' && v.trim() ? v.replace(/[\u0000-\u0008\u000b-\u001f]/g, ' ').slice(0, n) : null);
+const num = (v, lo, hi) => { const x = Number(v); return Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : null; };
+export const GRADED_KIND = /check|exam|quiz|test|assessment/i;
+export function cleanLook(raw, kindHint) {
+  if (!raw || typeof raw !== 'object') return null;
+  const p = raw.page && typeof raw.page === 'object' ? raw.page : {};
+  const page = { id: s(p.id, 90), kind: s(p.kind, 30), title: s(p.title, 160), module: s(p.module, 160) };
+  const graded = GRADED_KIND.test(String(page.kind || '')) || GRADED_KIND.test(String(kindHint || ''));
+  const out = { page, at: Date.now() };
+  out.inView = s(raw.inView, 200);
+  const v = raw.video && typeof raw.video === 'object' ? raw.video : null;
+  if (v && s(v.id, 40)) out.video = { id: s(v.id, 40), title: s(v.title, 200), t: num(v.t, 0, 36000) || 0, seconds: num(v.seconds, 0, 36000) || 0, chapter: s(v.chapter, 160), playing: !!v.playing };
+  const q = raw.question && typeof raw.question === 'object' ? raw.question : null;
+  if (q) {
+    if (graded || q.graded) out.question = { graded: true, n: s(q.n, 20) };
+    else out.question = { graded: false, n: s(q.n, 20), type: s(q.type, 30), text: s(q.text, 1200), choices: (Array.isArray(q.choices) ? q.choices : []).slice(0, 10).map((c) => s(c, 200)).filter(Boolean), answered: !!q.answered };
+  }
+  out.panels = (Array.isArray(raw.panels) ? raw.panels : []).slice(0, 6).map((x) => s(x, 120)).filter(Boolean);
+  const c = raw.card && typeof raw.card === 'object' ? raw.card : null;
+  if (c && s(c.front, 200)) out.card = { front: s(c.front, 200), turned: !!c.turned, back: c.turned ? s(c.back, 600) : null };
+  out.standing = cleanStanding(raw.standing);
+  return out;
+}
+export function cleanStanding(st) {
+  if (!st || typeof st !== 'object') return null;
+  const row = (r) => ({ id: s(r && r.id, 90), title: s(r && r.title, 140), module: num(r && r.module, 0, 999), pct: r && r.pct != null ? num(r.pct, 0, 100) : null,
+    seen: num(r && r.seen, 0, 1e6) || 0, recent: (s(r && r.recent, 12) || '').replace(/[^01u]/g, ''), ref: s(r && r.ref, 90), heading: s(r && r.heading, 160) });
+  const list = (a, n) => (Array.isArray(a) ? a : []).slice(0, n).filter((r) => r && typeof r === 'object' && s(r.title, 140)).map(row);
+  return {
+    from: s(st.from, 40), weak: list(st.weak, 8), strong: list(st.strong, 6), tried: num(st.tried, 0, 1e5) || 0,
+    read: num(st.read, 0, 1e5), videosWatched: num(st.videosWatched, 0, 1e5), cardsDue: num(st.cardsDue, 0, 1e5),
+    bestMock: st.bestMock && typeof st.bestMock === 'object' ? { percent: num(st.bestMock.percent, 0, 100), at: num(st.bestMock.at, 0, 1e14) } : null,
+    checks: (Array.isArray(st.checks) ? st.checks : []).slice(0, 30).map((x) => ({ module: num(x && x.module, 0, 999), title: s(x && x.title, 120), best: num(x && x.best, 0, 100), runs: num(x && x.runs, 0, 1e4) })),
+  };
+}
+/* Set with each message (null: the page did not answer). The standing is also
+   kept per course, so "what should I work on?" asked from another page is
+   answered from the course's own numbers, with their date. */
+export function setLook(raw, courseId) {
+  look = cleanLook(raw, here.kind);
+  const id = courseId || here.course;
+  if (look && look.standing && id) settings.set('assistant.standing.' + id, Object.assign({ at: Date.now() }, look.standing));
+  return look;
+}
+export const currentLook = () => look;
+export function lastStanding(courseId) {
+  const live = look && look.standing && (!courseId || here.course === courseId) ? Object.assign({ at: look.at, live: true }, look.standing) : null;
+  return live || (courseId ? settings.get('assistant.standing.' + courseId, null) : null);
 }
 
 /* The course to talk about: the one open, else the last one studied, else the only one. */
@@ -201,29 +261,54 @@ export function describe(uid, courseId, ref) {
   return {
     course: lc.course, unit: lc.unit, item: lc.item,
     kind: (here.course === pack.id && here.kind) || (lc.item && lc.item.kind) || null,
-    exercise: item ? { id: item.id, kind: item.kind, title: item.title, prompt: item.prompt || '', passed: item.passed, attempts: item.attempts, hintsTaken: hintsTaken(uid, pack, item), hintsTotal: (item.hints || []).length } : null,
+    // a reading lesson (the FS course lists its lessons as kind "lesson") is not a graded item
+    exercise: item && item.kind !== 'lesson' ? { id: item.id, kind: item.kind, title: item.title, prompt: item.prompt || '', passed: item.passed, attempts: item.attempts, hintsTaken: hintsTaken(uid, pack, item), hintsTotal: (item.hints || []).length } : null,
     progress: { percent: ov.percent, finished: ov.finished, count: ov.count, lessons: ov.lessons, current: ov.current || null, next: ov.next || null, continue: ov.continue || null, minutesLeft: ov.minutesLeft },
     reading: !ref || ref === here.ref ? reading(pack.id) : null,
     quizzes: quizSummary(uid, pack.id),
     notes: notesIndex(uid, pack),
-    notation: study.notation(pack),
+    notation: shownNotation(pack, study.notation(pack)),
     video: (() => { const v = study.videoScript(pack, at); return v ? { id: v.id, title: v.title, chapters: v.chapters } : null; })(),
+    look: look && (!here.course || here.course === pack.id) ? look : null,
+    knowledge: knowledge.has(pack),
     where: Object.assign(where(), { text: undefined }),
   };
 }
 
-/* Units and lessons, for "open unit 3" and friends. */
+/* The number a learner sees for a course's own module id n. A unit's n is the number
+   shown (its place in the course); its id is 'u' + the module's id, which stays put when
+   modules are shown in another order (FS: docs/dev/fs-reorder-plan.md). */
+export function shownModule(pack) {
+  const units = (pack && pack.manifest && pack.manifest.units) || [];
+  return (n) => { if (n == null) return n; const u = units.find((x) => x.id === 'u' + n); return u && u.n != null ? u.n : n; };
+}
+
+/* The notation guide with each symbol's per-module meanings labelled by the module number
+   the learner sees (byModule stays keyed by the module's id). */
+function shownNotation(pack, entries) {
+  if (!entries) return entries;
+  const shown = shownModule(pack);
+  return entries.map((e) => {
+    if (!e.byModule || !Object.keys(e.byModule).length) return e;
+    const meaning = Object.entries(e.byModule).map(([k, t]) => [shown(Number(k)), t]).sort((a, b) => a[0] - b[0]).map(([k, t]) => 'Module ' + k + ': ' + t).join(' · ');
+    return Object.assign({}, e, { meaning });
+  });
+}
+
+/* Units and lessons, for "open unit 3" and friends. "Lesson K" is the K-th lesson as
+   shown, not counting a unit's overview or summary page. */
+const lessonsOnly = (u) => (u.lessons || []).filter((l) => !/-(overview|summary)$/.test(l.id));
 export function findTarget(pack, words) {
   const w = String(words || '').toLowerCase().trim();
   const units = pack.manifest.units || [];
   let m = /^(?:unit|module|chapter)\s+(\d+)$/.exec(w);
   if (m) { const u = units.find((x) => Number(x.n) === Number(m[1])); return u ? { ref: (u.lessons[0] || {}).id || null, title: 'Unit ' + u.n + ': ' + u.title } : null; }
   m = /^(?:unit|module)\s+(\d+)\s*,?\s*lesson\s+(\d+)$/.exec(w);
-  if (m) { const u = units.find((x) => Number(x.n) === Number(m[1])); const l = u && u.lessons[Number(m[2]) - 1]; return l ? { ref: l.id, title: l.title } : null; }
+  if (m) { const u = units.find((x) => Number(x.n) === Number(m[1])); const l = u && lessonsOnly(u)[Number(m[2]) - 1]; return l ? { ref: l.id, title: l.title } : null; }
   m = /^lesson\s+(\d+)$/.exec(w);
   if (m) {
     const cur = here.ref ? units.find((u) => u.lessons.some((l) => l.id === here.ref)) : units[0];
-    const l = cur && cur.lessons[Number(m[1]) - 1];
+    const l = cur && lessonsOnly(cur)[Number(m[1]) - 1];
     return l ? { ref: l.id, title: l.title } : null;
   }
   for (const u of units) for (const l of u.lessons || []) if (l.id.toLowerCase() === w || l.title.toLowerCase() === w) return { ref: l.id, title: l.title };

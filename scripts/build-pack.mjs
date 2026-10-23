@@ -107,8 +107,18 @@ export async function build(name, opts) {
       if (leak) throw new Error('context() must never include answers, but it has: ' + leak);
       files['context/exercises.json'] = Buffer.from(JSON.stringify(ctx));
     }
+    // what the assistant may search (readings, glossary, flashcards, formulas,
+    // video chapters, the handbook's notation inventory): the same no-answers rule
+    if (typeof mod.knowledge === 'function') {
+      const kn = await mod.knowledge();
+      const leak = contextLeak(kn);
+      if (leak) throw new Error('knowledge() must never include answers, but it has: ' + leak.replace(/^context/, 'knowledge'));
+      files['context/knowledge.json'] = Buffer.from(JSON.stringify(kn));
+    }
   }
   if (existsSync(join(dir, 'resources.json'))) files['context/resources.json'] = readFileSync(join(dir, 'resources.json'));
+  // the checked list of outside videos the assistant may recommend (scripts/check-outside-videos.mjs)
+  if (existsSync(join(dir, 'outside-videos.json'))) files['context/outside-videos.json'] = readFileSync(join(dir, 'outside-videos.json'));
 
   const lessons = [];
   for (const u of units) {

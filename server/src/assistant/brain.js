@@ -74,6 +74,7 @@ let fetchImpl = null;
 export function useFetch(f) { fetchImpl = f; llmInst = null; voiceInst = null; }   // tests
 const f = (...a) => (fetchImpl || globalThis.fetch)(...a);
 
+export const fetcher = () => f;
 let llmInst = null;
 export function llm() { return llmInst || (llmInst = createLLM({ getConfig: aiConfig, fetch: f })); }
 

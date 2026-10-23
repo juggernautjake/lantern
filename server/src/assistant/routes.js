@@ -29,6 +29,7 @@ import * as context from './context.js';
 import * as resources from './resources.js';
 import * as reviewMod from './review.js';
 import * as studyMod from './study.js';
+import { findResources } from './tools.js';
 import * as settings from '../platform/settings.js';
 import * as eco from '../platform/eco.js';
 import * as bus from '../platform/bus.js';
@@ -37,6 +38,7 @@ import * as local from '../platform/local.js';
 import * as packs from '../platform/packs.js';
 import { allIds } from '../platform/progress.js';
 import { spoken } from '../../public/shell/spoken.js';
+import { tutorSpeech } from '../../public/shell/tutor-speech.js';
 
 export const PREF_DEFAULTS = {
   enabled: true,
@@ -100,10 +102,25 @@ export function register(r) {
   });
   r.get('/api/assistant/context', async () => ({ body: context.describe(local.userId()) }));
 
-  r.post('/api/assistant/chat', async ({ body }) => ({ body: await chatMod.chat({ text: body && body.text }) }));
+  // look: what is on the learner's screen as they ask (app/course/host.js), when the course answered
+  r.post('/api/assistant/chat', async ({ body }) => ({ body: await chatMod.chat({ text: body && body.text, look: body && body.look }) }), { maxBody: 64 * 1024 });
+
+
+  // The same turn, streamed as lines of JSON: {t:'action'} the moment a tool puts a visual on screen,
+  // {t:'text'} as the reply is written, then {t:'done'} with the whole turn (cues checked).
+  r.post('/api/assistant/chat-stream', async ({ body, res }) => {
+    res.writeHead(200, { 'content-type': 'application/x-ndjson; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'x-accel-buffering': 'no' });
+    const w = (o) => { try { res.write(JSON.stringify(o) + '\n'); } catch (e) { /* closed */ } };
+    const t0 = Date.now();
+    try {
+      const out = await chatMod.chat({ text: body && body.text, look: body && body.look }, { text: (s) => w({ t: 'text', s, ms: Date.now() - t0 }), action: (a) => w({ t: 'action', a, ms: Date.now() - t0 }) });
+      w({ t: 'done', out });
+    } catch (e) { w({ t: 'done', out: { reply: 'I could not answer just then: ' + e.message, actions: [], via: 'error' } }); }
+    res.end();
+  }, { maxBody: 64 * 1024 });
 
   r.post('/api/assistant/tts', async ({ body, send }) => {
-    const said = studyMod.pronounce(context.currentPack(), String((body && body.text) || '').slice(0, 4000));
+    const said = studyMod.pronounce(context.currentPack(), tutorSpeech(String((body && body.text) || '').slice(0, 4000)));
     const text = spoken(said).slice(0, 2500);   // the page sends the reply as written: pronunciations, then words
     if (!text.trim()) return { status: 400, body: { error: 'Nothing to say.' } };
     try {
@@ -152,7 +169,7 @@ export function register(r) {
     const b = body || {};
     const pack = context.currentPack(b.course);
     const d = context.describe(local.userId(), b.course, b.ref);
-    return { body: await resources.find(d, pack ? context.resourcesOf(pack) : null, { topic: b.topic || null, refresh: !!b.refresh }) };
+    return { body: await findResources(pack, d, pack ? context.resourcesOf(pack) : null, { topic: b.topic || null, refresh: !!b.refresh }) };
   });
   r.post('/api/assistant/review', async ({ body }) => {
     const b = body || {};
@@ -163,13 +180,13 @@ export function register(r) {
     const ctx = context.describe(uid, pack ? pack.id : course);
     // remembered only against a course that is installed here
     const report = Object.assign({}, b.report, { course: pack ? pack.id : null });
-    return { body: await reviewMod.review(report, { uid, ctx, res: pack ? context.resourcesOf(pack) : null }) };
+    return { body: await reviewMod.review(report, { uid, ctx, res: pack ? context.resourcesOf(pack) : null, shown: pack ? context.shownModule(pack) : null }) };
   }, { maxBody: 256 * 1024 });
   // Study sessions: Lantern's take on what to work on, from the learner's topic record.
   r.post('/api/assistant/plan', async ({ body }) => {
     const b = body || {};
     const pack = context.currentPack(typeof b.course === 'string' ? b.course : null);
-    return { body: await studyMod.plan(Object.assign({}, b, { course: pack ? pack.id : null }), { uid: local.userId() }) };
+    return { body: await studyMod.plan(Object.assign({}, b, { course: pack ? pack.id : null }), { uid: local.userId(), shown: pack ? context.shownModule(pack) : null }) };
   }, { maxBody: 64 * 1024 });
   r.post('/api/assistant/play', async ({ body }) => {
     const list = await resources.playable(String((body && body.query) || 'focus')).catch(() => []);

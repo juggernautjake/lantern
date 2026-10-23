@@ -96,19 +96,24 @@
   // Inside a line: [title](https://…) and bare https:// links become links that
   // open in a new tab; **bold** and `code` keep their emphasis. Everything else
   // stays text, so nothing in a reply can become markup.
-  const INLINE = /\[([^\]\n]{1,300})\]\((https?:\/\/[^\s)]{1,2000})\)|(https?:\/\/[^\s<>()]{1,2000}[^\s<>().,;:!?'"])|\*\*([^*\n]{1,300})\*\*|`([^`\n]{1,300})`/g;
+  const INLINE = /\[([^\]\n]{1,300})\]\((https?:\/\/[^\s)]{1,2000})\)|(https?:\/\/[^\s<>()]{1,2000}[^\s<>().,;:!?'"])|\*\*([^*\n]{1,300})\*\*|`([^`\n]{1,300})`|(?<![A-Za-z0-9*])\*([^*\s](?:[^*\n]{0,200}[^*\s])?)\*(?![A-Za-z0-9*])|(?<![A-Za-z0-9_])_([^_\s](?:[^_\n]{0,200}[^_\s])?)_(?![A-Za-z0-9_])/g;
+  // the course's math formatting (sigma_mean, x^2, e^{-x}) as real subscripts and superscripts, never raw markup;
+  // the assistant module hands in the rules (setMath), so every md() in the app gets them
+  let mathFn = null;
+  function maths(t) { return mathFn ? mathFn(t).map((p) => (p.s != null ? p.s : el(p.sub != null ? 'sub' : 'sup', { text: p.sub != null ? p.sub : p.sup }))) : [t]; }
   function inline(t) {
     const out = [];
     const re = new RegExp(INLINE.source, 'g');
     let last = 0, m;
     while ((m = re.exec(t))) {
-      if (m.index > last) out.push(t.slice(last, m.index));
+      if (m.index > last) out.push(...maths(t.slice(last, m.index)));
       if (m[2] || m[3]) out.push(el('a', { href: m[2] || m[3], target: '_blank', rel: 'noopener noreferrer', text: m[1] || m[3] }));
-      else if (m[4]) out.push(el('strong', { text: m[4] }));
-      else out.push(el('code', { text: m[5] }));
+      else if (m[4]) out.push(el('strong', {}, maths(m[4])));
+      else if (m[5]) out.push(el('code', { text: m[5] }));
+      else out.push(el('em', {}, maths(m[6] || m[7])));
       last = re.lastIndex;
     }
-    if (last < t.length) out.push(t.slice(last));
+    if (last < t.length) out.push(...maths(t.slice(last)));
     return out;
   }
   function md(text) {
@@ -583,6 +588,8 @@
   // message whenever the learner moves); the assistant and the resource finder
   // use it, and so does the owner's "studying now" column.
   S.here = { course: null, ref: null, kind: null, title: null };
+  S.asks = {};          // askCourse: id → resolve
+  S.pending = null;     // deliver: a message waiting for a course to open
   let hereTimer = null;
   function reportHere(h) {
     const same = S.here.course === h.course && S.here.ref === h.ref && S.here.kind === h.kind;
@@ -613,7 +620,8 @@
     if (meta.dirty) {
       // changes made here that never reached the database (the window closed
       // too fast): send them first, then take the merged copy back
-      try { await api('/api/courses/' + encodeURIComponent(id) + '/state', { method: 'PUT', body: { keys: readKeys(keys), savedAt: Math.max(Date.now(), (st.savedAt || 0) + 1) } }); } catch (e) { /* kept; tried again on the next change */ }
+      // (recover: the copy it replaces is kept for the course to fold in, when it can)
+      try { await api('/api/courses/' + encodeURIComponent(id) + '/state', { method: 'PUT', body: { keys: readKeys(keys), savedAt: Math.max(Date.now(), (st.savedAt || 0) + 1), recover: (st.savedAt || 0) > (meta.savedAt || 0) } }); } catch (e) { /* kept; tried again on the next change */ }
       st = await api('/api/courses/' + encodeURIComponent(id) + '/state' + (openRef ? '?open=' + encodeURIComponent(openRef) : ''));
     }
     keys.forEach((k) => { try { if (st.keys[k] !== undefined) localStorage.setItem(k, st.keys[k]); else localStorage.removeItem(k); } catch (e) { /* blocked */ } });
@@ -672,7 +680,11 @@
     reportHere({ course: id, ref: openRef || null, kind: openRef ? null : 'course', title: null });
     const onMsg = (e) => {
       if (e.source !== frame.contentWindow || !e.data) return;
+      // an answer to askCourse (what is on the screen, for the assistant)
+      if (e.data.lantern === 'look' && typeof e.data.id === 'string' && S.asks[e.data.id]) { S.asks[e.data.id](e.data.look || null); return; }
       if (e.data.lantern === 'nav') {
+        // a message waiting for this course to open (Open lesson from the assistant)
+        if (S.pending && S.pending.course === id) { const m = S.pending.msg; S.pending = null; setTimeout(() => { try { frame.contentWindow.postMessage(m, location.origin); } catch (err) { /* closed */ } }, 0); }
         // Moving inside the course: the address stops naming the page it was
         // opened at, so a refresh comes back to the page you are on (the course
         // remembers it), not the one you came in by — a quiz half done included.
@@ -1146,7 +1158,7 @@
 
   /* ---------------------------------------------------------------- seams */
   window.LanternShell = {
-    version: 2, api, el, toast, on, fire, registerSettings, md, ask, measure, isPhone, isRemote, PHONE_Q,
+    version: 2, api, el, toast, on, fire, registerSettings, md, setMath: (f) => { mathFn = f; }, ask, measure, isPhone, isRemote, PHONE_Q,
     here: () => Object.assign({}, S.here),
     route: () => route(),
     render: () => render(),
@@ -1162,6 +1174,29 @@
       if (!p || (courseId && p.id !== courseId) || !p.frame.contentWindow) return false;
       try { p.frame.contentWindow.postMessage(msg, location.origin); return true; } catch (e) { return false; }
     },
+    // A message for a course, opening it first (at ref) when it is not open: it
+    // is delivered once the course says where it is. The assistant's Open lesson
+    // and Open in the handbook buttons.
+    deliver(courseId, ref, msg) {
+      if (window.LanternShell.toCourse(courseId, msg)) return 'sent';
+      S.pending = { course: courseId, msg };
+      location.hash = ref ? '#/learn/' + encodeURIComponent(courseId) + '?open=' + encodeURIComponent(ref) : '#/learn/' + encodeURIComponent(courseId);
+      return 'opening';
+    },
+    // Ask the open course and wait (briefly) for its answer: { lantern: 'look-request' } → its look, or null.
+    askCourse(courseId, msg, ms) {
+      const p = S.playing;
+      if (!p || (courseId && p.id !== courseId) || !p.frame.contentWindow) return Promise.resolve(null);
+      const id = 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      return new Promise((resolve) => {
+        const done = (v) => { delete S.asks[id]; clearTimeout(timer); resolve(v); };
+        const timer = setTimeout(() => done(null), ms || 400);
+        S.asks[id] = done;
+        try { p.frame.contentWindow.postMessage(Object.assign({}, msg, { id }), location.origin); } catch (e) { done(null); }
+      });
+    },
+    // The course open in the player, if any: { id }.
+    playing: () => (S.playing ? { id: S.playing.id } : null),
     // What the person is studying right now: course, unit, lesson, objectives, key terms.
     // A page of its own (#/<name>): render(main, route). friends.js adds #/friends.
     registerPage(name, renderFn) { pages[name] = renderFn; if (route().name === name) render(); },

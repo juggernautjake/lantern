@@ -30,10 +30,10 @@ const base = () => process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com'
 const VERSION = '2023-06-01';
 
 export const MODELS = {
-  chat: process.env.LANTERN_MODEL_CHAT || 'claude-sonnet-5',
-  grade: process.env.LANTERN_MODEL_GRADE || 'claude-sonnet-5',
-  review: process.env.LANTERN_MODEL_REVIEW || 'claude-sonnet-5',
-  quick: process.env.LANTERN_MODEL_QUICK || 'claude-haiku-4-5-20251001',
+  chat: process.env.LANTERN_MODEL_CHAT || 'claude-sonnet-5-5',
+  grade: process.env.LANTERN_MODEL_GRADE || 'claude-sonnet-5-5',
+  review: process.env.LANTERN_MODEL_REVIEW || 'claude-sonnet-5-5',
+  quick: process.env.LANTERN_MODEL_QUICK || 'claude-haiku-5-5',
 };
 
 export function configured() {

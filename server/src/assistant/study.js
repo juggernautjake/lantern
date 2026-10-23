@@ -119,7 +119,7 @@ export async function plan(body, opts) {
   if (!L.ready() || !topics.length) return { text: plainPlan(topics), via: 'plain' };
   const rec = (opts && opts.uid !== undefined && b.course) ? review.summary(opts.uid, b.course) : null;
   const data = '<record>\nTopics, weakest first (title · module · % right · answers · last answers, 1 = right):\n' +
-    topics.map((t) => `- ${t.title} · M${t.module} · ${t.pct}% · ${t.seen} · ${t.recent || '-'}`).join('\n') +
+    topics.map((t) => `- ${t.title} · M${opts && typeof opts.shown === 'function' ? opts.shown(t.module) : t.module} · ${t.pct}% · ${t.seen} · ${t.recent || '-'}`).join('\n') +
     (rec ? '\nRecent quizzes: ' + rec.recent.map((r) => `${r.when} ${r.kind} ${r.percent}%`).join('; ') : '') + '\n</record>';
   try {
     const text = await L.complete({ system: SYSTEM, prompt: data, maxTokens: 300, timeoutMs: 40000 });

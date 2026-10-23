@@ -26,13 +26,17 @@ import { createAudio, CHANNELS } from '/eco/client/audio-chain.js';
 import { createSoundPanel } from '/eco/client/sound-panel.js';
 import { createLayout } from '/eco/client/layout-core.js';
 import { pickBrowserVoice } from '/eco/shared/voices-defaults.mjs';
-import { createSpeechQueue } from '/shell/speech-queue.js';
+import { createSpeechQueue, voiceChunks } from '/shell/speech-queue.js';
 import { spoken } from '/shell/spoken.js';
 import { courseSpeech } from '/shell/course-speech.js';
+import { tutorSpeech } from '/shell/tutor-speech.js';
+import { mathParts } from '/shell/math-text.js';
 import { createWakeListener, recordRequest } from '/shell/wake.js';
+import { Turn, chatStream, stripCues } from '/shell/teach.js';
 
 const LS = window.LanternShell;
 const { api, el, toast } = LS;
+LS.setMath && LS.setMath(mathParts);   // replies show the course's subscripts and superscripts, never raw markup
 const $ = (s, r) => (r || document).querySelector(s);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const AUTOMATED = !!navigator.webdriver;          // a test browser: never open the real microphone
@@ -77,11 +81,11 @@ async function start() {
   LS.on('eco-in', onEco);
   LS.on('mic', () => refreshMic());
   LS.on('assistant-prefs', (ev) => { if (ev && ev.prefs) { A.prefs = ev.prefs; applyPrefs(); } });
-  LS.on('milestone', (ev) => { if (A.prefs.enabled && ev && ev.title) say((ev.kind === 'unit' ? 'You finished ' : 'You passed ') + ev.title + '. Well done!'); });
-  LS.on('reminder', (ev) => { if (A.prefs.enabled && ev && ev.text && !(A.info.quiet && A.info.quiet.quiet)) say(ev.text); });
+  LS.on('milestone', (ev) => { if (A.prefs.enabled && ev && ev.title) announce((ev.kind === 'unit' ? 'You finished ' : 'You passed ') + ev.title + '. Well done!'); });
+  LS.on('reminder', (ev) => { if (A.prefs.enabled && ev && ev.text && !(A.info.quiet && A.info.quiet.quiet)) announce(ev.text); });
   LS.on('here', () => { if (A.tab === 'resources') showResources(); });
   refreshMic();
-  window.LanternAssistant = { say, stop: stopSpeaking, send, showResources, play: playQueue, media: mediaControl, reviewResults, unlock: unlockAudio, fitViewport, state: () => ({ speaking: A.speaking, queue: speechQueue().length, gen: speechQueue().generation, listening: A.listening, wakeWanted: !!A.recWanted, audioUnlocked: !!A.unlocked, peer: A.peer, lamp: A.lamp ? A.lamp.getState() : null, media: A.media.queue.length ? { index: A.media.index, title: (A.media.queue[A.media.index] || {}).title, kind: A.media.kind } : null }) };
+  window.LanternAssistant = { say, stop: stopSpeaking, send, showResources, play: playQueue, media: mediaControl, reviewResults, unlock: unlockAudio, fitViewport, state: () => ({ speaking: A.speaking, queue: speechQueue().length, gen: speechQueue().generation, saying: speechQueue().current ? { id: speechQueue().current.id, kind: speechQueue().current.kind } : null, listening: A.listening, wakeWanted: !!A.recWanted, audioUnlocked: !!A.unlocked, peer: A.peer, lamp: A.lamp ? A.lamp.getState() : null, media: A.media.queue.length ? { index: A.media.index, title: (A.media.queue[A.media.index] || {}).title, kind: A.media.kind } : null }) };
 }
 
 // Wake the audio chain (after a tap). A browser without Web Audio throws here
@@ -300,17 +304,59 @@ function unlockAudio() {
   } catch (e) { /* no voices */ }
 }
 
+/* Every message from Lantern carries a small replay button: it says that
+   message again (from the start, cutting off whatever else is being said),
+   and while that message is being said it becomes a stop button. opts.speak
+   is what is said when it differs from what is shown (a review's gist). */
+let msgSeq = 0;
 function addMsg(who, text, opts) {
   const o = opts || {};
   const log = $('.as-log');
   if (!log) return null;
-  const m = el('div', { class: 'as-msg ' + who, 'data-testid': 'msg-' + who }, [LS.md ? LS.md(text) : el('p', { text })]);
+  const m = el('div', { class: 'as-msg ' + who + (o.note ? ' note' : ''), 'data-testid': 'msg-' + who }, [LS.md ? LS.md(text) : el('p', { text })]);
   if (o.links && o.links.length) m.appendChild(el('ul', { class: 'as-links' }, o.links.map((x) => el('li', {}, [el('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer', text: x.title }), x.source ? el('small', { text: ' · ' + x.source }) : null]))));
   if (o.button) m.appendChild(o.button);
+  for (const x of o.extras || []) m.appendChild(x);
+  if (who === 'lantern') handbookLinks(m);
+  if (who === 'lantern') attachReplay(m, String(o.speak || text || '').trim());
   const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
   log.appendChild(m);
   if (nearBottom || who === 'me') scrollToMsg(log, m);
   return m;
+}
+function attachReplay(m, words) {
+  {
+    const id = 'm' + (++msgSeq);
+    m.dataset.sayId = id;
+    if (words) {
+      const replay = el('button', { class: 'as-replay', type: 'button', 'data-testid': 'msg-replay', title: 'Say it again', 'aria-label': 'Say it again' });   // its icon is drawn by the stylesheet: never part of the message's text
+      replay.addEventListener('click', () => {
+        const now = speechQueue().current;
+        if (now && now.id === id) { stopSpeaking(); return; }
+        unlockAudio(); resumeAudio();
+        say(words, { kind: 'reply', id, force: true });
+      });
+      m.appendChild(replay);
+    }
+    m.sayId = id;
+  }
+}
+// the message being said: its replay button shows ■, and it is marked
+function markSaying(id) {
+  document.querySelectorAll('.as-msg.saying').forEach((m) => { if (m.dataset.sayId !== id) { m.classList.remove('saying'); const b = m.querySelector('.as-replay'); if (b) { b.title = 'Say it again'; b.setAttribute('aria-label', 'Say it again'); } } });
+  if (!id) return;
+  const m = document.querySelector('.as-msg[data-say-id="' + id + '"]');
+  if (!m) return;
+  m.classList.add('saying');
+  const b = m.querySelector('.as-replay');
+  if (b) { b.title = 'Stop'; b.setAttribute('aria-label', 'Stop saying this'); }
+}
+/* An announcement (a milestone, a reminder): shown in the conversation, and
+   said after whatever Lantern is saying now; dropped unsaid if it has waited
+   more than a minute (it would no longer be news). */
+function announce(text) {
+  const m = addMsg('lantern', text, { note: true });
+  return say(text, { kind: 'note', id: m ? m.sayId : null, maxAge: 60000 });
 }
 
 function scrollToMsg(log, m) {
@@ -323,32 +369,95 @@ function scrollToMsg(log, m) {
 }
 
 /* ================================================================= talk === */
+/* Asking again moves on: the answer being said stops at once (a short
+   announcement may finish), and only the newest question's answer is said.
+   An older answer that arrives after a newer question is still shown, with
+   its replay button, but not said. */
 let sendChain = Promise.resolve();
+let askSeq = 0;
 export function send(text) {
   if (!text) return Promise.resolve(null);
   addMsg('me', text);                 // shown at once; answered in turn
-  const run = sendChain.then(() => sendNow(text));
+  const ticket = ++askSeq;
+  speechQueue().cancel((x) => x.kind === 'reply');
+  const run = sendChain.then(() => sendNow(text, ticket));
   sendChain = run.catch(() => null);
   return run;
 }
-async function sendNow(text) {
+// the lamp and status line once a step is over: talking, thinking, or ready
+function settle() {
+  if (A.speaking) { setLamp('speak'); setStatus('Speaking…'); }
+  else if (A.thinking || askSeq > doneSeq) { setLamp('think'); setStatus('Thinking…'); }
+  else { setLamp('idle'); setStatus(readyText()); }
+}
+let doneSeq = 0;
+async function sendNow(text, ticket) {
   resumeAudio();
   setLamp('think'); setStatus('Thinking…'); A.thinking = true;
   let out;
-  try { out = await api('/api/assistant/chat', { method: 'POST', body: { text } }); }
-  catch (e) { out = { reply: 'I could not answer just then: ' + e.message, actions: [] }; }
+  // what is on their screen as they ask (the course answers in a moment, or not at all)
+  let look = null;
+  try { const h = LS.here(); look = LS.askCourse && h.course ? await LS.askCourse(h.course, { lantern: 'look-request' }, 400) : null; } catch (e) { look = null; }
+  // streamed: a visual appears the moment its tool returns, the words as they are written, cues firing as the text reaches them
+  const turn = new Turn(teachCtx());
+  const body = look ? { text, look } : { text };
+  try { out = await chatStream(body, { onAction: (a) => { turn.action(a); }, onText: (s) => { if (ticket === askSeq || !ticket) turn.text(s); } }); }
+  catch (e) {
+    if (turn.m) out = { reply: stripCues(turn.said) + ' (the answer was cut short: ' + e.message + ')', actions: [] };
+    else { try { out = await api('/api/assistant/chat', { method: 'POST', body }); } catch (e2) { out = { reply: 'I could not answer just then: ' + e2.message, actions: [] }; } }
+  }
+  A.lastTurn = { timing: out.timing || null, firstVisual: turn.t.firstVisual, firstText: turn.t.firstText };
   A.thinking = false;
+  doneSeq = Math.max(doneSeq, ticket || 0);
+  const newest = !ticket || ticket === askSeq;
   const acts = out.actions || [];
-  if (acts.some((a) => a.type === 'stop')) { stopSpeaking(); setLamp('idle'); setStatus('Ready'); return out; }
+  if (acts.some((a) => a.type === 'stop')) { stopSpeaking(); settle(); return out; }
   if (acts.some((a) => a.type === 'clear')) { const log = $('.as-log'); if (log) log.innerHTML = ''; }
   const links = acts.filter((a) => a.type === 'links').flatMap((a) => a.items || []);
   const sug = acts.find((a) => a.type === 'suggest');
   const button = sug ? el('button', { class: 'btn', type: 'button', onclick: () => openRef(sug.course, sug.ref) }, 'Open ' + sug.title) : null;
-  if (out.reply) addMsg('lantern', out.reply, { links: links.concat((out.citations || []).map((c) => ({ title: c.title, url: c.url }))), button });
+  const shown = (a) => (a.type === 'teach' || (a.type === 'course-video' && a.card)) && turn.m;
+  const extras = attachments(acts.filter((a) => !shown(a)));
+  const allLinks = links.concat((out.citations || []).map((c) => ({ title: c.title, url: c.url })));
+  const words = stripCues(out.reply || '');
+  let m;
+  if (turn.m) {
+    const more = [];
+    if (allLinks.length) more.push(el('ul', { class: 'as-links' }, allLinks.map((x) => el('li', {}, [el('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer', text: x.title }), x.source ? el('small', { text: ' · ' + x.source }) : null]))));
+    if (button) more.push(button);
+    m = turn.finish(out.reply || '', more.concat(extras));
+    handbookLinks(m);
+    attachReplay(m, words.trim());
+  } else m = out.reply || extras.length ? addMsg('lantern', out.reply || '', { links: allLinks, button, extras }) : null;
   for (const a of acts) runAction(a);
   // the voice can take a moment to arrive: still 'thinking' until it speaks
-  if (out.reply && !out.silent) { setStatus('Answering…'); say(out.reply); } else { setLamp('idle'); setStatus('Ready'); }
+  if (words.trim() && !out.silent && newest && say(words, { kind: 'reply', id: m ? m.sayId : null })) { if (!A.speaking) setStatus('Answering…'); } else settle();
   return out;
+}
+/* what the tutor's visual cards need from the panel */
+function teachCtx() {
+  return {
+    el, md: (t) => (LS.md ? LS.md(t) : el('p', { text: t })),
+    day: () => document.documentElement.getAttribute('data-theme') === 'day',
+    scroll: (m) => { const log = $('.as-log'); if (log && m) { const near = log.scrollHeight - log.scrollTop - log.clientHeight < 140 + m.offsetHeight; if (near || m.dataset.pinned) scrollToMsg(log, m); } },
+    addMsg: (who, t, o) => { const m = addMsg(who, t, o); m.dataset.pinned = '1'; return m; },
+    canOpen: (a) => !!(a.home && a.home.ref) || a.kind === 'equation',
+    open: (a) => {
+      if (a.kind === 'equation') openReference(a.course, { id: a.eid });
+      else { LS.deliver(a.course, a.home.ref, { lantern: 'go-part', id: a.home.ref, figure: a.kind === 'figure' || a.kind === 'demo' ? a.fid : undefined, heading: a.kind === 'passage' ? a.heading : undefined }); }
+      if (phone() && document.body.dataset.dock === 'sheet') toggleDock();
+    },
+    videoCard: (a) => courseVideoCard(a),
+    cueVideo: (a, node, cue) => {
+      const w = cue.split(/\s+/);
+      if (w[0] === 'play' || w[0] === 'seek') {
+        const t = Number(w[1]) || 0, end = Number(w[2]) || 0;
+        const b = node.querySelector('[data-testid="course-video-play"]');
+        if (EMBED.card === node && EMBED.frame) { try { EMBED.frame.contentWindow.postMessage({ lantern: 'teach-cue', cue }, location.origin); } catch (e) { /* gone */ } }
+        else if (b) { unlockAudio(); playCard(node, node.querySelector('.as-vframe'), b, node.querySelector('.as-vnote'), Object.assign({}, a, { t, end: w[0] === 'play' ? end : 0, play: w[0] === 'play' })); }
+      } else if (EMBED.card === node && EMBED.frame) { try { EMBED.frame.contentWindow.postMessage({ lantern: 'teach-cue', cue }, location.origin); } catch (e) { /* gone */ } }
+    },
+  };
 }
 function runAction(a) {
   switch (a.type) {
@@ -364,6 +473,123 @@ function openRef(course, ref) {
   if (!course) return;
   location.hash = ref ? '#/learn/' + encodeURIComponent(course) + '?open=' + encodeURIComponent(ref) : '#/course/' + encodeURIComponent(course);
 }
+
+/* ========================================================= attachments === */
+/* What a reply carries besides its words, only when it needs it:
+     course-video     a card that plays the course's own player right here,
+                      with Open lesson (to the page, scrolled to the video)
+     outside-videos   checked YouTube and Khan Academy videos: links, opened
+                      in the browser
+     handbook         an Open button for each handbook item looked up
+   and in any reply, "Handbook p. 10" opens the reference at that page. */
+function attachments(acts) {
+  const out = [];
+  for (const a of acts) {
+    if (a.type === 'course-video') out.push(courseVideoCard(a));
+    else if (a.type === 'outside-videos' && (a.items || []).length) out.push(outsideList(a.items));
+    else if (a.type === 'handbook' && (a.items || []).length) out.push(el('div', { class: 'as-hbrow', 'data-testid': 'handbook-open' }, a.items.map((x) => el('button', { class: 'btn quiet as-hb', type: 'button', title: x.form || '', onclick: () => openReference(a.course, x) }, 'Open p. ' + String(x.page).replace(/,.*$/, '') + ' · ' + shortSection(x.section)))));
+  }
+  return out;
+}
+const shortSection = (t) => { const s = String(t || '').replace(/^\d+\s+/, ''); return s.length > 34 ? s.slice(0, 32) + '…' : s; };
+const mmss = (t) => { t = Math.max(0, Math.round(t || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+function openReference(course, x) {
+  const h = LS.here();
+  const c = course || h.course;
+  if (!c || !LS.deliver) return;
+  LS.deliver(c, null, { lantern: 'open-reference', id: x.id || null, equation: x.equation || null, page: x.page || null, form: x.form || null, part: x.part || null });
+  if (phone() && document.body.dataset.dock === 'sheet') toggleDock();
+}
+// "Handbook p. 10" in a reply: a button that opens the reference at that page
+function handbookLinks(m) {
+  const walker = document.createTreeWalker(m, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (/Handbook p\.\s?\d/.test(n.nodeValue) && !(n.parentNode.closest && n.parentNode.closest('a,button,code,pre')) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const n of nodes) {
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    const text = n.nodeValue;
+    text.replace(/Handbook p\.\s?(\d{1,3})/g, (hit, page, at) => {
+      frag.appendChild(document.createTextNode(text.slice(last, at)));
+      frag.appendChild(el('button', { class: 'as-hblink', type: 'button', 'data-testid': 'handbook-page', title: 'Open the handbook at page ' + page, onclick: () => openReference(null, { page }) }, hit));
+      last = at + hit.length;
+      return hit;
+    });
+    frag.appendChild(document.createTextNode(text.slice(last)));
+    n.parentNode.replaceChild(frag, n);
+  }
+}
+function outsideList(items) {
+  return el('ul', { class: 'as-outside', 'data-testid': 'outside-videos' }, items.map((v) => el('li', {}, [
+    el('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer', 'data-testid': 'outside-video', title: (v.why || '') + ' (opens in your browser)' }, [el('span', { class: 'as-oplay', 'aria-hidden': 'true', text: '▶' }), ' ' + v.title]),
+    el('small', { text: ' — ' + (v.provider === 'khan' ? 'Khan Academy' : v.channel + ' · YouTube') + ' · ' + v.minutes + ' min ↗' }),
+  ])));
+}
+
+/* A course video, in the chat. ▶ puts the course's own player here (the pack's
+   page in its video-card mode: every control it has, its chapters and its
+   questions); one plays at a time. Its watching goes to the open course, which
+   saves it. Open lesson goes to the page the video is on, scrolled to it and
+   cued where it was. */
+const EMBED = { card: null, frame: null, course: null, id: null, asks: {} };
+function courseVideoCard(a) {
+  const box = el('div', { class: 'as-vframe' });
+  const meta = [a.kind, a.minutes + ' min', a.home ? 'Module ' + a.home.module + ' · ' + a.home.title : null, a.captionsOnly ? 'captions only for now' : null].filter(Boolean).join(' · ');
+  const play = el('button', { class: 'btn primary', type: 'button', 'data-testid': 'course-video-play' }, a.t ? '▶ Play from ' + mmss(a.t) : '▶ Play');
+  const open = a.home ? el('button', { class: 'btn', type: 'button', 'data-testid': 'course-video-open', title: 'Go to ' + a.home.title + ', to the video' }, 'Open lesson') : null;
+  const note = el('small', { class: 'as-vnote', hidden: true });
+  const card = el('article', { class: 'as-vcard', 'data-testid': 'course-video-card', 'data-video': a.id }, [
+    el('div', { class: 'as-vhead' }, [el('b', { text: a.title }), el('small', { text: meta + (a.chapter ? ' · from “' + a.chapter + '”' : '') })]),
+    box, el('div', { class: 'row as-vrow' }, [play, open]), note,
+  ]);
+  play.addEventListener('click', () => { unlockAudio(); playCard(card, box, play, note, a); });
+  if (open) open.addEventListener('click', async () => {
+    const t = EMBED.card === card ? await embedWhere(true) : null;
+    stopEmbed();
+    LS.deliver(a.course, a.home.ref, { lantern: 'go-video', id: a.home.ref, video: a.id, t: t != null ? t : (a.t || 0) });
+    if (phone() && document.body.dataset.dock === 'sheet') toggleDock();
+  });
+  return card;
+}
+function playCard(card, box, play, note, a) {
+  if (EMBED.card === card) return;
+  stopEmbed();
+  mediaControl('pause');
+  const src = '/packs/' + encodeURIComponent(a.course) + '/index.html?host=lantern&lantern-video=' + encodeURIComponent(a.id) + (a.t ? '&t=' + a.t : '') + (a.end ? '&end=' + a.end : '') + (a.play === false ? '' : '&play=1');
+  const frame = el('iframe', { class: 'as-vplayer', title: a.title, src, 'data-testid': 'course-video-frame', allow: 'autoplay; fullscreen', allowfullscreen: '' });
+  box.appendChild(frame);
+  play.hidden = true;
+  const open = LS.playing && LS.playing();
+  note.hidden = !!(open && open.id === a.course);
+  note.textContent = 'Open the course for this to count as watched.';
+  Object.assign(EMBED, { card, frame, course: a.course, id: a.id, play });
+  card.classList.add('playing');
+  const log = $('.as-log');
+  if (log) requestAnimationFrame(() => { const r = card.getBoundingClientRect(), lr = log.getBoundingClientRect(); if (r.bottom > lr.bottom) log.scrollTop += r.bottom - lr.bottom + 8; });
+}
+function stopEmbed() {
+  if (!EMBED.card) return;
+  try { EMBED.frame.remove(); } catch (e) { /* gone */ }
+  if (EMBED.play) EMBED.play.hidden = false;
+  EMBED.card.classList.remove('playing');
+  Object.assign(EMBED, { card: null, frame: null, course: null, id: null, play: null });
+}
+function embedWhere(pause) {
+  if (!EMBED.frame || !EMBED.frame.contentWindow) return Promise.resolve(null);
+  const id = 'w' + Date.now().toString(36);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => { delete EMBED.asks[id]; resolve(null); }, 500);
+    EMBED.asks[id] = (t) => { clearTimeout(timer); delete EMBED.asks[id]; resolve(t); };
+    try { EMBED.frame.contentWindow.postMessage({ lantern: 'embed-where', id, pause: !!pause }, location.origin); } catch (e) { resolve(null); }
+  });
+}
+window.addEventListener('message', (e) => {
+  if (!EMBED.frame || e.source !== EMBED.frame.contentWindow || e.origin !== location.origin || !e.data) return;
+  const d = e.data;
+  if (d.lantern === 'embed-size' && Number(d.h) > 0) EMBED.frame.style.height = Math.min(Math.round(Number(d.h)), Math.round(window.innerHeight * 0.85)) + 'px';
+  else if (d.lantern === 'embed-progress' && d.state && d.state.videos) LS.toCourse(EMBED.course, { lantern: 'absorb', state: { videos: d.state.videos } });
+  else if (d.lantern === 'embed-where' && EMBED.asks[d.id]) EMBED.asks[d.id](Number(d.t) || 0);
+});
 
 /* ============================================================== reviews === */
 /* A check, practice set or mock exam just ended in the course: Lantern looks
@@ -389,15 +615,16 @@ async function reviewNow(course, report) {
   try { out = await api('/api/assistant/review', { method: 'POST', body: { course, report } }); }
   catch (e) { out = null; }
   A.thinking = false;
-  if (!out || !out.text) { setLamp('idle'); setStatus(readyText()); return out; }
+  if (!out || !out.text) { settle(); return out; }
   const vids = (out.videos || []).flatMap((g) => g.items.map((v) => Object.assign({ topic: g.topic }, v)));
   const button = vids.length ? el('button', { class: 'btn', type: 'button', 'data-testid': 'review-videos', onclick: () => { setTab('resources'); paintReviewVideos(out.videos); } }, 'Videos for your weak spots (' + vids.length + ')') : null;
-  addMsg('lantern', out.text, { button });
+  const msg = addMsg('lantern', out.text, { button, speak: out.speak });
   if (phone() && document.body.dataset.dock !== 'sheet') {
     const t = toast(el('div', { class: 'row' }, [el('span', { text: 'Lantern looked over your answers.' }), el('button', { class: 'btn', type: 'button', 'data-testid': 'review-open', onclick: () => { t.remove(); showDock(); setTab('talk'); } }, 'Read it')]), { key: 'review', ms: 15000 });
   }
   if (vids.length && A.tab === 'resources') paintReviewVideos(out.videos);
-  if (A.prefs && A.prefs.speakReplies && out.speak) { setStatus('Answering…'); say(out.speak); } else { setLamp('idle'); setStatus(readyText()); }
+  // said like an answer: it replaces an older answer still being said
+  if (out.speak && say(out.speak, { kind: 'reply', id: msg ? msg.sayId : null })) { if (!A.speaking) setStatus('Answering…'); } else settle();
   return out;
 }
 function paintReviewVideos(groups) {
@@ -420,32 +647,45 @@ function speechQueue() {
   A.speech = createSpeechQueue({
     speak: speakOne,
     peerBusy: () => !!A.peer,
-    onStart: () => {
+    onStart: (item) => {
+      if (!A.speaking) { notifySpeaking(true); try { A.audio.duck(true); } catch (e) { /* no Web Audio */ } }
       A.speaking = true;
-      notifySpeaking(true);
-      try { A.audio.duck(true); } catch (e) { /* no Web Audio */ }
+      markSaying(item.id);
       setLamp('speak'); setStatus('Speaking…');
     },
-    onEnd: () => {
+    // the answer being said was replaced: silent at once, the next one starts as soon as it can
+    onCancel: () => { markSaying(null); hush(); },
+    onEnd: (e) => {
+      markSaying(null);
+      if (A.lamp) { A.lamp.setAnalyser(null); A.lamp.setLevel(0); }
+      if (e && e.more) return;              // straight on to the next: no flicker back to idle
       A.speaking = false;
       notifySpeaking(false);
-      try { A.audio.duck(false); } catch (e) { /* no Web Audio */ }
-      if (A.lamp) { A.lamp.setAnalyser(null); A.lamp.setLevel(0); }
-      setLamp('idle'); setStatus('Ready');
+      try { A.audio.duck(false); } catch (e2) { /* no Web Audio */ }
+      settle();
     },
   });
   return A.speech;
 }
-/* Say something: queued behind anything already being said. */
-export function say(text) {
-  if (!A.prefs.enabled || !A.prefs.speakReplies) return;
-  if (phone() && !A.unlocked) return;   // a phone speaks only once a tap has started the session
+/* Say something.
+     kind 'reply'  an answer (a chat reply, a review, a replay): replaces the
+                   answer being said and any still waiting, and goes first
+     kind 'note'   an announcement (the default): waits its turn
+   force: say it even with "Say replies out loud" off (the replay button —
+   pressing it is asking). Returns the queued item, or null when nothing
+   will be said. */
+export function say(text, opts) {
+  const o = opts || {};
+  if (!A.prefs.enabled || (!A.prefs.speakReplies && !o.force)) return null;
+  if (phone() && !A.unlocked) return null;   // a phone speaks only once a tap has started the session
   // The reply goes on as written: the server voice turns it into words with the
   // course's own pronunciations (ΣLat, h_cr, DEG mode) before anything else, and
   // the browser's voice does the same here (speakable) — the same path the
   // lesson narration takes, so Lantern says a formula the way the videos do.
   const t = String(text || '').trim();
-  if (t) speechQueue().say(t);
+  if (!t) return null;
+  if (serverVoice()) voiceAudio(voiceChunks(t)[0]);   // its first words are on their way already
+  return speechQueue().say(t, { kind: o.kind === 'reply' ? 'reply' : 'note', id: o.id || null, maxAge: o.maxAge || 0 });
 }
 /* The current course's pronunciations, for the browser's own voice. */
 let courseWords = null, courseWordsAt = 0;
@@ -455,29 +695,53 @@ async function loadCourseWords() {
   courseWordsAt = Date.now();
   return courseWords;
 }
-async function speakable(raw) { return spoken(courseSpeech(String(raw || ''), await loadCourseWords())); }
+async function speakable(raw) { return spoken(courseSpeech(tutorSpeech(String(raw || '')), await loadCourseWords())); }
 /* Stop now: what is playing, and everything queued. */
 export function stopSpeaking() {
   speechQueue().stop();
-  if (A.curAudio) { try { A.curAudio.pause(); A.curAudio.removeAttribute('src'); A.curAudio.load(); } catch (e) { /* gone */ } }
-  try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) { /* none */ }
+  hush();
   A.paused = false;
   if (A.lamp) { A.lamp.setAnalyser(null); A.lamp.setLevel(0); }
-  setLamp('idle');
+  settle();
+}
+// silence what is playing now (the queue decides what comes next)
+function hush() {
+  if (A.curAudio) { try { A.curAudio.pause(); A.curAudio.removeAttribute('src'); A.curAudio.load(); } catch (e) { /* gone */ } }
+  try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) { /* none */ }
 }
 function notifySpeaking(on) { api('/api/assistant/speaking', { method: 'POST', body: { on } }).catch(() => {}); }
 
+/* The server voice (ElevenLabs / OpenAI), in pieces: the first sentence or two
+   on its own so the voice starts quickly, then longer pieces, each fetched
+   while the one before it plays. The audio is kept (the last 40 pieces), so a
+   replay starts at once and costs nothing. A piece the server cannot say (no
+   key, no credit) is said by the browser's own voice, with the rest. */
+const serverVoice = () => !(A.info && A.info.voice && A.info.voice.provider === 'browser');
+const voiceCache = new Map();
+function voiceAudio(text) {
+  const v = (A.info && A.info.voice) || {};
+  const key = JSON.stringify([v.provider, v.voiceName, v.settings]) + '\n' + text;
+  if (voiceCache.has(key)) { const p = voiceCache.get(key); voiceCache.delete(key); voiceCache.set(key, p); return p; }
+  const p = fetch('/api/assistant/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) })
+    .then((r) => (r.status === 200 ? r.blob() : null)).catch(() => null);
+  p.then((b) => { if (!b && voiceCache.get(key) === p) voiceCache.delete(key); });   // asked again next time
+  voiceCache.set(key, p);
+  while (voiceCache.size > 40) voiceCache.delete(voiceCache.keys().next().value);
+  return p;
+}
 async function speakOne(text, stale) {
   A.sayingText = text;
-  // The server voice (ElevenLabs / OpenAI) when there is one; else the browser's own.
-  let blob = null;
-  try {
-    const r = await fetch('/api/assistant/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) });
-    if (r.status === 200) blob = await r.blob();
-  } catch (e) { blob = null; }
-  if (stale()) return;
-  if (blob) return playBlob(blob, stale);
-  return browserSpeak(await speakable(text), stale);
+  if (!serverVoice()) return browserSpeak(await speakable(text), stale);
+  const parts = voiceChunks(text);
+  for (let i = 0; i < parts.length; i++) {
+    const blob = await voiceAudio(parts[i]);
+    if (stale()) return;
+    if (!blob) return browserSpeak(await speakable(parts.slice(i).join(' ')), stale);
+    if (i + 1 < parts.length) voiceAudio(parts[i + 1]);   // the next piece, while this one plays
+    A.sayingText = parts[i];
+    await playBlob(blob, stale);
+    if (stale()) return;
+  }
 }
 function playBlob(blob, stale) {
   if (phone()) return playBlobPhone(blob, stale);
@@ -565,7 +829,7 @@ async function browserSpeak(text, stale) {
 }
 function testSound(k) {
   resumeAudio();
-  if (k === 'voice') return say('This is my voice, at this volume.');
+  if (k === 'voice') return say('This is my voice, at this volume.', { kind: 'reply', force: true });
   if (k === 'music' || k === 'video') return toast('Play something (ask me for focus music) to hear this level.');
   return A.audio.testChime();
 }
@@ -686,7 +950,7 @@ function askForRequest(done, opts) {
       if (text) return send(text);
       if (why === 'blocked') return setStatus('The microphone is blocked in this browser.');
       setStatus('I did not hear a request.');
-      say('Sorry, I didn’t catch that. Say “' + wakeName() + '” and try again.');
+      say('Sorry, I didn’t catch that. Say “' + wakeName() + '” and try again.', { kind: 'reply' });
     },
   });
 }
@@ -848,7 +1112,9 @@ function paintResources(r) {
   const reads = (r.online || []).filter((x) => x.type !== 'video');
   if (vids.length) {
     box.appendChild(el('h4', { text: 'Videos' }));
-    box.appendChild(el('div', { class: 'as-cards', 'data-testid': 'res-videos' }, vids.map((v, i) => card(v, () => playQueue(vids.map((x) => ({ videoId: x.videoId, title: x.title, source: x.source, thumbnail: x.thumbnail })), i, 'video')))));
+    // a checked video (the course's own list) is a link: it opens in the browser, never played in here
+    const playable = vids.filter((x) => x.videoId);
+    box.appendChild(el('div', { class: 'as-cards', 'data-testid': 'res-videos' }, vids.map((v) => card(v, v.videoId ? () => playQueue(playable.map((x) => ({ videoId: x.videoId, title: x.title, source: x.source, thumbnail: x.thumbnail })), playable.indexOf(v), 'video') : null))));
   }
   if (reads.length) {
     box.appendChild(el('h4', { text: 'Read and discuss' }));
@@ -960,7 +1226,7 @@ async function renderVoiceSettings(box) {
     box.appendChild(el('button', { class: 'btn', type: 'button', onclick: async () => { if (!vk.value.trim()) return; try { await api('/api/assistant/ai', { method: 'PUT', body: { voiceKey: vk.value, voiceProvider: v.provider } }); vk.value = ''; toast('Saved.'); LS.render(); } catch (e) { toast(e.message); } } }, 'Save key'));
   }
   box.appendChild(el('div', { class: 'row', style: 'margin-top:14px' }, [
-    el('button', { class: 'btn primary', type: 'button', 'data-testid': 'voice-preview', onclick: () => { stopSpeaking(); A.info.voice = v; say('Hello, I am Lantern. Shall we pick up where you left off?'); } }, 'Preview'),
+    el('button', { class: 'btn primary', type: 'button', 'data-testid': 'voice-preview', onclick: () => { A.info.voice = v; say('Hello, I am Lantern. Shall we pick up where you left off?', { kind: 'reply', force: true }); } }, 'Preview'),
     el('button', { class: 'btn', type: 'button', onclick: stopSpeaking }, 'Stop'),
   ]));
 }

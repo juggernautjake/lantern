@@ -132,6 +132,48 @@ function counters(manifest, keys) {
   return { seconds: Number(S[p.seconds || 'seconds']) || 0, position: S[p.position || 'lastPage'] || null };
 }
 
+/* ------------------------------------------------- copies set aside --- */
+/* A pack that can fold two copies of its state together names a storage key
+   for that (manifest progress.merge). Whenever a copy of its keys would be
+   lost here (replaced by a newer copy from another computer, refused as a
+   stale save, or overwritten by unsent work from this one), it is queued
+   under that key as well as kept in the history, and the pack folds it in
+   the next time it opens. The value is { q: [{ id, at, keys }], done: [ids] };
+   the pack marks what it folded in as done, and two values merge as the
+   union of both queues less everything either has done, so merging is
+   order-free and idempotent like every other rule in merge.js. */
+const MERGE_KEEP = 3, MERGE_DONE_KEEP = 50;
+export function mergeKey(manifest) {
+  const p = manifest && manifest.progress;
+  const k = p && p.merge;
+  return k && k !== p.key && storageKeys(manifest).includes(k) ? k : null;
+}
+const parseQueue = (v) => { try { const o = typeof v === 'string' ? JSON.parse(v) : v; return { q: Array.isArray(o && o.q) ? o.q : [], done: Array.isArray(o && o.done) ? o.done : [] }; } catch (e) { return { q: [], done: [] }; } };
+export function mergeQueues(a, b) {
+  const A = parseQueue(a), B = parseQueue(b);
+  const done = [...new Set([...A.done, ...B.done])].slice(-MERGE_DONE_KEEP);
+  const seen = new Set(done), q = [];
+  for (const e of [...A.q, ...B.q]) if (e && e.id && !seen.has(e.id)) { seen.add(e.id); q.push(e); }
+  q.sort((x, y) => (x.at || 0) - (y.at || 0));
+  return JSON.stringify({ q: q.slice(-MERGE_KEEP), done });
+}
+/* keys with `aside` (a copy of a pack's keys) queued under the merge key,
+   unless its main state is the one kept anyway. */
+function setAside(manifest, keys, aside, at) {
+  const mk = mergeKey(manifest), main = manifest.progress.key;
+  if (!mk || !aside || typeof aside[main] !== 'string' || aside[main] === keys[main]) return keys;
+  const copy = {};
+  for (const [k, v] of Object.entries(aside)) if (k !== mk && typeof v === 'string') copy[k] = v;
+  const entry = { id: randomUUID(), at: at || nowMs(), keys: copy };
+  return Object.assign({}, keys, { [mk]: mergeQueues(mergeQueues(keys[mk], aside[mk]), { q: [entry], done: [] }) });
+}
+/* Two values of the merge key from two saves: both queues, less what is done. */
+function keepQueue(manifest, prev, incoming) {
+  const mk = mergeKey(manifest);
+  if (!mk || (prev[mk] === undefined && incoming[mk] === undefined)) return incoming;
+  return Object.assign({}, incoming, { [mk]: mergeQueues(prev[mk], incoming[mk]) });
+}
+
 /* Point the pack at a page before it loads ("open this lesson"). */
 export function withPosition(manifest, keys, ref) {
   const p = manifest.progress;
@@ -224,10 +266,17 @@ export function saveState(userId, pack, body, opts) {
   const savedAt = Number(body && body.savedAt) || nowMs();
   const cur = ensureRow(userId, pack.id);
   if (!o.force && cur.saved_at && savedAt < cur.saved_at) {
-    return { stale: true, savedAt: cur.saved_at, keys: json(cur.state_json, {}) };
+    // the newer copy stays; the refused one is queued for the pack to fold
+    // in (where it can), so the work in it is not simply thrown away
+    let keep = json(cur.state_json, {});
+    const queued = setAside(pack.manifest, keep, Object.assign({}, keep, incoming), savedAt);
+    if (queued !== keep) { keep = queued; run('UPDATE pack_progress SET state_json=? WHERE user_id=? AND pack_id=?', JSON.stringify(keep), userId, pack.id); }
+    return { stale: true, savedAt: cur.saved_at, keys: keep };
   }
   const prevKeys = json(cur.state_json, {});
-  const keys = o.replace ? incoming : Object.assign({}, prevKeys, incoming);
+  let keys = o.replace ? incoming : keepQueue(pack.manifest, prevKeys, Object.assign({}, prevKeys, incoming));
+  // unsent work from this computer replacing a copy it never saw: that copy is queued
+  if (body && body.recover && !o.replace) keys = setAside(pack.manifest, keys, prevKeys, cur.saved_at);
   if (o.reason && Object.keys(prevKeys).length) {
     run('INSERT INTO pack_progress_history (user_id, pack_id, state_json, saved_at, reason) VALUES (?,?,?,?,?)',
       userId, pack.id, cur.state_json, cur.saved_at, o.reason);
@@ -446,7 +495,12 @@ export function applyRemote(userId, pack, remote) {
     // (keeping ours in the history), then let the merged items fill it in.
     // Its time was counted on the computer that spent it, so it is not new here.
     run('UPDATE pack_progress SET seconds_seen = ? WHERE user_id=? AND pack_id=?', counters(pack.manifest, snap.keys).seconds, userId, pack.id);
-    saveState(userId, pack, { keys: snap.keys, savedAt: Number(snap.at) }, { force: true, replace: true, reason: 'newer copy from another computer' });
+    // A pack that can fold copies together gets this computer's copy queued
+    // to fold in: work done here offline, after the other computer's copy
+    // was taken, is in it and nowhere else.
+    const mine = json(r.state_json, {});
+    const incoming = setAside(pack.manifest, keepQueue(pack.manifest, mine, Object.assign({}, snap.keys)), mine, r.saved_at);
+    saveState(userId, pack, { keys: incoming, savedAt: Number(snap.at) }, { force: true, replace: true, reason: 'newer copy from another computer' });
     run('UPDATE pack_progress SET snapshot_synced_at = saved_at WHERE user_id=? AND pack_id=?', userId, pack.id);
     // The copy's completions were read out as new; those the hub already has
     // are not.

@@ -106,15 +106,20 @@ const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅':
   'ₘ': 'm', 'ₚ': 'p', 'ₛ': 's', 'ₜ': 't', 'ₕ': 'h', 'ₗ': 'l', 'ᵣ': 'r', 'ᵤ': 'u', 'ᵥ': 'v', '₋': '-', '₊': '+', '₌': '=', '₍': '(', '₎': ')' };
 // What is left once the maths is words: arrows, marks and signs a voice would skip or spell.
 const MARKS = [
+  // the centerline mark on a plan: "fill at ℄"
+  [/℄/g, ' centerline '],
   // a calculator's arrow keys, standing alone, are presses: "math, right, right, one"
-  [/◄►/g, ' to '], [/(^|[\s`[(])[►▶](?=$|[\s`\])])/g, '$1 right, '], [/(^|[\s`[(])[◄◀](?=$|[\s`\])])/g, '$1 left, '],
+  [/◄►/g, ' to '], [/(^|[\s`[(])[►▶]{2}(?=$|[\s`\])])/g, '$1 right, right, '], [/(^|[\s`[(])[►▶](?=$|[\s`\])])/g, '$1 right, '], [/(^|[\s`[(])[◄◀](?=$|[\s`\])])/g, '$1 left, '],
   [/▲/g, ' up '], [/▼/g, ' down '],
   [/[▸►▶]/g, ' to '], [/[◂◄◀]/g, ' from '], [/↔/g, ' to and from '], [/⇄/g, ' swap '], [/[↑⇑]/g, ' up '], [/[↓⇓]/g, ' down '],
   [/[✓✔☑]/g, ' check. '], [/[✗✘]/g, ' no. '], [/⚠️?/g, ' Warning: '], [/§/g, ' section '], [/¶/g, ' paragraph '],
   [/[⟂⊥]/g, ' perpendicular to '], [/ℓ/g, ' ell '], [/[•◦▪]/g, ', '], [/[＋]/g, '+'], [/[－]/g, '-'], [/µm|μm/g, ' micrometers'], [/[µμ]/g, ' mu '],
+  // a matrix's transpose, Aᵀ, and a named triangle, △ABC
+  [/ᵀ/g, ' transpose '], [/[△▵]/g, ' triangle '],
   [/\$/g, ' dollars '], [/#/g, ' number '], [/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]️?/gu, ' '], [/️/g, ''],
 ];
-const FRACTIONS = { '½': ' one half', '⅓': ' one third', '⅔': ' two thirds', '¼': ' one quarter', '¾': ' three quarters', '⅛': ' one eighth', '⅜': ' three eighths', '⅝': ' five eighths', '⅞': ' seven eighths' };
+const FRACTIONS = { '½': ' one half', '⅓': ' one third', '⅔': ' two thirds', '¼': ' one quarter', '¾': ' three quarters', '⅛': ' one eighth', '⅜': ' three eighths', '⅝': ' five eighths', '⅞': ' seven eighths',
+  '⅕': ' one fifth', '⅖': ' two fifths', '⅗': ' three fifths', '⅘': ' four fifths', '⅙': ' one sixth', '⅚': ' five sixths', '⅐': ' one seventh', '⅑': ' one ninth', '⅒': ' one tenth' };
 const COMMON = { '1/2': 'one half', '1/3': 'one third', '2/3': 'two thirds', '1/4': 'one quarter', '3/4': 'three quarters', '1/8': 'one eighth', '3/8': 'three eighths', '5/8': 'five eighths', '7/8': 'seven eighths' };
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -166,8 +171,21 @@ function eachBrace(s, re, fn) {
   return s;
 }
 
-const OPERAND = '[A-Za-z0-9)\\]α-ωΑ-Ω]';
+const OPERAND = '[A-Za-z0-9)\\]α-ωΑ-Ω⸴\uE000]';
 const HAS_OP = /[+\-−*/×÷=^]|\b(plus|minus|times|over)\b/;
+// A pause the maths needs ("the quantity a plus b, over c"), kept apart from a written comma
+// until the end so a list (A(1,000, 1,000)) is still told from a grouping.
+const PAUSE = '⸴';
+const J = String.fromCharCode(0xE000);          // joins letters spelled apart (see lettersApart)
+/* What is written before a bracket multiplies it: one letter (perhaps with a
+   subscript or a prime), a number, a power, a closing bracket. Not a word, and
+   not a spelled abbreviation ("P W("). */
+function factorBefore(b) {
+  b = b.replace(/[ \t]+$/, '');
+  if (b.endsWith(J) || /[)α-ωΑ-Ω]$/.test(b) || /(?:squared|cubed|[A-Za-z0-9]\^\d)$/.test(b)) return true;
+  if (/(?:^|[^\w.^])\d+(?:\.\d+)?$/.test(b)) return true;
+  return /(?:^|[^A-Za-z0-9_^.'’])(?:ay|[A-Za-z](?:_(?:\{[^{}]*\}|\([^()]*\)|[A-Za-z0-9]+))?['′″]*)$/.test(b) && !/(?:^|\s)[A-Z] [A-Z]$/.test(b) && !/(?:^|\s)a$/.test(b);
+}
 
 /* √( … ) with any brackets inside: "the square root of the quantity …," */
 function roots(s) {
@@ -192,22 +210,121 @@ function implicitTimes(s) {
   for (let i = s.indexOf('('); i >= 0; i = s.indexOf('(', i + 1)) {
     if (i === 0) continue;
     const before = s.slice(0, i);
+    // ½ × (…), 2 × (a + b): already "times", so only "the quantity"
+    if (/×[ \t]*$/.test(before)) {
+      let d = 0, e = i;
+      for (; e < s.length; e++) { if (s[e] === '(') d++; else if (s[e] === ')' && --d === 0) break; }
+      const y = s.slice(i + 1, e);
+      if (e < s.length && /[+\-−]|\b(?:plus|minus)\b/.test(y) && !/,/.test(y)) { s = s.slice(0, i) + 'the quantity ' + y + PAUSE + ' ' + s.slice(e + 1); }
+      continue;
+    }
     const close = before.endsWith(')');
     // one letter (perhaps with a subscript) or a number: not a word, not a spelled abbreviation ("P W(")
-    const factor = /(?:^|[^A-Za-z0-9_^.])(?:[A-Za-z](?:_(?:\{[^{}]*\}|[A-Za-z0-9]+))?|\d+(?:\.\d+)?)$/.test(before) && !/(?:^|\s)[A-Z] [A-Z]$/.test(before);
+    const factor = /(?:^|[^A-Za-z0-9_^.])(?:[A-Za-z](?:_(?:\{[^{}]*\}|[A-Za-z0-9]+))?|\d+(?:\.\d+)?)$/.test(before) && !/(?:^|\s)[A-Z] [A-Z]$/.test(before)
+      || /(?:squared|cubed) ?$/.test(before) || before.endsWith(J) || /(?:^|[^A-Za-z])ay$/.test(before);
     if (!close && !factor) continue;
     let depth = 0, k = i;
     for (; k < s.length; k++) { if (s[k] === '(') depth++; else if (s[k] === ')' && --depth === 0) break; }
     if (k >= s.length) continue;
     const x = s.slice(i + 1, k);
+    // 2(Σh_odds): "two times the sum of h sub odds"
+    if (!close && /^\s*[Σ∑]/.test(x) && !/[+\-−,]/.test(x)) { const h = ' times ('; s = s.slice(0, i) + h + x + ')' + s.slice(k + 1); i += h.length - 1; continue; }
     if (/,/.test(x) || (!close && !HAS_OP.test(x))) continue;
-    const chain = close || s[k + 1] === '(';
-    const head = chain ? ' times (' : ' times the quantity ';
-    s = s.slice(0, i) + head + x + (chain ? ')' : ', ') + s.slice(k + 1);
+    // a sum or difference is heard as one quantity: "(…) times the quantity H minus h sub one,"
+    // (only after a fraction or a lone factor: two bracketed sums side by side stay "(a + b) times (c + d)")
+    const prev = close ? before.slice(0, before.lastIndexOf(')')) : '';
+    const quantity = /[+\-−]|\b(?:plus|minus)\b/.test(x) && !/^\s*-/.test(x) && (!close || /\/|\bover\b|the quantity/.test(prev.slice(prev.lastIndexOf('(') + 1)) || /[=+\-] ?\(\s*the quantity/.test(prev));
+    const chain = !quantity && (close || s[k + 1] === '(');
+    const head = (close && /[ \t]$/.test(before) ? '' : ' ') + (chain ? 'times (' : 'times the quantity ');
+    s = s.slice(0, i) + head + x + (chain ? ')' : PAUSE + ' ') + s.slice(k + 1);
     i += head.length - 1;                          // the next search starts inside x
   }
   // (r/2)x²: the bracket, times x
   return s.replace(/\)([A-Za-z])(?![A-Za-z])/g, ') times $1');
+}
+
+/* Letters written together in a formula are separate quantities: Ax + By + C = 0
+   is "A x plus B y plus C", X = xB/p is "x B over p", ½ab sin C is "a b". A run of
+   two or three letters is spelled only where it stands in the maths (against an
+   operator, a power, a subscript, a function or a coefficient) and is not a word,
+   a unit or one of the course's names. "By" in Ax + By is a variable because it
+   stands between two operators. The letters are joined by U+E000 until the end,
+   so the rules for the article "a" leave "a x squared" alone. */
+const WORDS = new Set(('a an as at be by do go he if in is it me my no of on or so to up us we am id ok ex vs oh ah um eh hi ' +
+  'the and for are but not you all any can had her was one our out day get has him his how man new now old see two way who did its let put say she too use ' +
+  'per rod arc sum max min cut run sag lot top end mid net fee pay low gap air off far may set row key job few yes buy due try raw sit eye bar bad big pit fix ' +
+  'odd leg ray sun sea red fly pad bed dry wet via cap dip sub law own why ago ask got hot lie log age add aim bid box cat dog fit fog ice ink kit lab lag lap ' +
+  'leg lid lip mad map mix mob mud nod nor nut oak oil pan pen pet pie pin pop pot rag rat rib rim rip rub rug sad saw sew sip six sky son sow spy tag tap tar ' +
+  'tax tea ten tie tin tip toe ton toy tub van vet war web wig win yet zip ace act ado aft ale ape apt arm art ash awe axe aye bag bat bay bee bet bin bit bow ' +
+  'bud bug bun bus cab cam cod cog con cot cow cry cub cue cup dab dam den dew die dig dim din dot dub dug dye ear eat ebb egg ego elf elk elm emu era eve fad ' +
+  'fan fat fax fed fen fib fig fin fir fit flu foe fox fry fun fur gag gal gas gel gem gin gum gun gut guy gym ham hat hay hem hen hid hip hit hog hop hub hue ' +
+  'hug hum hut ill imp inn ion ivy jab jam jar jaw jet jig jog jot joy jug keg kin lad lay led lee lit lob lop lot lug men met mew mop mow nab nag nap nip nit ' +
+  'now nun oar oat obi odd ode oft ohm opt orb ore owe owl own pad pal pat paw pea peg pew pig pit ply pod pox pry pub pug pun pup pus rad ram ran rap raw rid ' +
+  'rob roe rot row rue rum rut rye sap sat shy sin sip sir sit sob sod sop sot spa sty sue sup tab tad tan ted tee the thy tic til tit tog tom tot tow tug two ' +
+  'urn use vat vex vie vow wad wag wan wax wed wet who wig wit woe wok won woo wow yak yam yap yaw yen yes yew yin you zag zap zen zig zoo ' +
+  'ii iii iv vi vii ix xi xii').split(/\s+/));
+// never spelled, wherever they stand: units, functions and the course's names
+const NEVER = new Set(('ft mi yd km cm mm nm um kg lb ac ch rd lk hr ppm ppb psi mph kph gal atm sta pts mg ml hz khz mhz ghz ns ms sec min deg rad gon mil ' +
+  'yr mo wk lbs yds sq cu pp st nd rd th am pm in ' +
+  'sin cos tan csc cot log ln lim adj det exp mod arc max opp hyp ' +
+  'az lat dep elev std avg cor alt dms dd zee err tol num den dec int frac lon vrs vr nmi hg hpa kpa mbar twp lks ell exa rec pol ht ' +
+  'two one six ten dop dops cad tin cors harn ha mu nu xi pi phi chi psi eta tau rho ay').split(/\s+/));
+// an operator on either side makes it maths; a bracket, a comma, a subscript or the end of the line only lets it be
+const STRONG_LEFT = /[=+\-×·*/÷±<>≤≥≈≅∝½⅓⅔¼¾\d]$/, WEAK_LEFT = /(?:^|[(,;:])$/;
+const STRONG_RIGHT = /^(?:[=+\-×·*/÷±<>≤≥≈≅∝²³⁰-⁹⁻ⁿ^]|(?:sin|cos|tan|sec|csc|cot)\b)/, WEAK_RIGHT = /^(?:$|[),;:.₀-₉ₙᵢⱼₖₘ_′″'])/;
+function lettersApart(s) {
+  if (!/[=+\-×·*/÷≈≅<>≤≥²³⁰-⁹ⁿ⁻₀-₉_^]/.test(s)) return s;
+  // a formula: an equation, or a line of maths with no words in it (ad − bc)
+  const formula = /[=≈≅≤≥]/.test(s) || !/[A-Za-z]{4,}/.test(s);
+  // 2a, 0.5a: a coefficient and the variable a, "two ay"
+  s = s.replace(/(^|[^\w.])(\d+(?:\.\d+)?)a(?![A-Za-z0-9'’])/g, '$1$2 ay');
+  return s.replace(/(?<![A-Za-z0-9_^\\'’.\u0370-\u03ff\uE000](?<!(?:^|[^A-Za-z0-9.,])\d+)|[A-Za-z]-)([A-Za-z]{2,3})(?![A-Za-z0-9'’\uE000]|-[A-Za-z]|\.[A-Za-z])/g, (m, t, at, all) => {
+    const before = all.slice(0, at).replace(/[ \t]+$/, ''), after = all.slice(at + t.length).replace(/^[ \t]+/, '');
+    // 2ab, ½at², at²: a coefficient before or a power after, written against it
+    const glued = (/[\d½⅓⅔¼¾]$/.test(all.slice(0, at)) || /^(?:[²³⁰-⁹⁻ⁿ]|\^)/.test(all.slice(at + t.length)));
+    const sl = STRONG_LEFT.test(before), sr = STRONG_RIGHT.test(after);
+    // a name that is no word, against an operator or a subscript, is letters wherever it stands: distance ab/…, df₁
+    const word = WORDS.has(t.toLowerCase()) || NEVER.has(t.toLowerCase());
+    const sub = /^[₀-₉ₙᵢⱼₖₘ_]/.test(all.slice(at + t.length));
+    if (!glued && !((sl || sr) && (sl || WEAK_LEFT.test(before) || (!word && sr)) && (sr || WEAK_RIGHT.test(after))) && !(!word && sub && /^[a-z]+$/.test(t))
+      && !(formula && !word && /^[a-z]+$/.test(t) && WEAK_LEFT.test(before) && /^\)/.test(after))) return m;
+    const lower = t.toLowerCase();
+    const mixed = /[a-z][A-Z]/.test(t);                                  // xB, fB, wL, dA
+    const capped = /^[A-Z][a-z]{1,2}$/.test(t);                          // Ax, By, Cy, Bxy
+    if (/^[A-Z]+$/.test(t)) return m;                                   // an abbreviation: course-speech spells it
+    if (NEVER.has(lower) && !(lower === 'ac' && /\d$/.test(all.slice(0, at)))) return m;     // 4ac is algebra, 4 ac is acres
+    if (WORDS.has(lower) && !glued) {
+      // a word, unless it stands between two operators as a variable does: "+ By +"
+      if (!(capped && t.length === 2 && formula && /[=+\-]$/.test(before) && (/^[=+\-]/.test(after) || after === ''))) return m;
+    }
+    if (!mixed && !capped && !/^[a-z]+$/.test(t)) return m;
+    if (!formula && !mixed && !glued && !(sl && sr)) return m;
+    return t.split('').map((c) => (c === 'a' ? 'ay' : c)).join('\uE000');     // the variable a is "ay" here too
+  });
+}
+
+/* A function of what is in its bracket: f(x + Δx) "f of x plus delta x", f′(a)
+   "f prime of ay", ∂f(x, y) "partial f of x, y", and the statistics tables' F(x),
+   R(x), W(x), F(α, df₁, df₂). A capital before a calculation is a product, not a
+   function: R(T − L/2), F(1 + i), and W(1.0) is the table's value at 1.0. */
+function functionsOf(s) {
+  for (let i = s.search(/(?<![A-Za-z_]|[A-Za-z_]\d+)[fgFGRWA][′'″’]*\(/); i >= 0; ) {
+    const head = /^([fgFGRWA])([′'″’]*)\(/.exec(s.slice(i));
+    const open = i + head[0].length - 1;
+    let depth = 0, k = open;
+    for (; k < s.length; k++) { if (s[k] === '(') depth++; else if (s[k] === ')' && --depth === 0) break; }
+    const x = s.slice(open + 1, k);
+    const lower = /[fg]/.test(head[1]);
+    const ok = k < s.length && (lower ? x.trim() !== '' : /^[a-z]$/.test(x.trim()) || /^[α-ω][ \t]?,/.test(x.trim()));
+    if (ok) {
+      const arg = x.trim() === 'a' ? 'ay' : x;
+      const rep = head[1] + head[2] + ' of ' + arg + (/[+\-−×/,]/.test(x) ? '⸴' : '') + ' ';
+      s = s.slice(0, i) + rep + s.slice(k + 1);
+    }
+    const next = s.slice(i + 1).search(/(?<![A-Za-z_]|[A-Za-z_]\d+)[fgFGRWA][′'″’]*\(/);
+    i = next < 0 ? -1 : i + 1 + next;
+  }
+  return s;
 }
 
 /* ------------------------------------------------------------- spoken() --- */
@@ -228,13 +345,23 @@ function once(input) {
   s = s.replace(/([\d%])\s?\/\s?(yr|year|hr|h|mo|wk|day)\b(?![\/^²³])/g, (_, a, u) => a + ' per ' + PER[u]);
   // slope ratios: "1½H:1V" is "one and a half horizontal to one vertical"
   s = s.replace(/(\d*½|\d+(?:\.\d+)?|\d+\/\d+)\s?H\s?:\s?(\d+(?:\.\d+)?)\s?V\b/g, (_, h, v) => h.replace(/^(\d+)½$/, '$1 and a half').replace(/^½$/, 'one half') + ' horizontal to ' + v + ' vertical');
+  // sec as a unit, not the secant: ft/sec², miles/sec, 4.905 sec/1,000 ft, "in sec ="
+  const LEN = { ft: 'feet', feet: 'feet', m: 'meters', meters: 'meters', mi: 'miles', miles: 'miles', km: 'kilometers' };
+  s = s.replace(/(\d[\d,]*(?:\.\d+)?[ \t]?)?(?<![\wΑ-ω^])(ft|feet|m|meters|mi|miles|km)[ \t]?\/[ \t]?sec\b(?:[ \t]?(²|\^2))?/g, (m, n, u, sq) => (n ? n.trim() + ' ' : '') + (n && n.trim() === '1' ? LEN[u].replace(/s$/, '').replace(/^feet$/, 'foot') : LEN[u]) + ' per second' + (sq ? ' squared' : ''));
+  s = s.replace(/\b(sec|seconds?)[ \t]?\/[ \t]?1[ \t]?(km|mi|ft|m)\b/g, (_, a, u) => 'seconds per ' + { km: 'kilometer', mi: 'mile', ft: 'foot', m: 'meter' }[u])
+    .replace(/\b(sec|seconds?|ft|feet|mm|cm|m)[ \t]?\/[ \t]?(1,000|1000|100)[ \t]?(ft|feet|m)\b/g, (_, a, n, u) => ({ sec: 'seconds', ft: 'feet', mm: 'millimeters', cm: 'centimeters', m: 'meters' }[a] || a) + ' per ' + (n === '100' ? 'hundred ' : 'thousand ') + (u === 'm' ? 'meters' : 'feet'));
+  s = s.replace(/(\d[\d,]*(?:\.\d+)?)[ \t]?sec\b(?![ \t]*[(α-ωΑ-Ω])/g, (_, n) => n + (n === '1' ? ' second' : ' seconds'))
+    .replace(/\b(in|per)[ \t]sec\b(?=[ \t]*(?:[=,;:.)]|$))/g, (_, w) => w + (w === 'per' ? ' second' : ' seconds'));
+  // adj(A), det(A): the adjoint, the determinant
+  s = s.replace(/\badj[ \t]?\(([A-Z])\)/g, ' the adjoint of $1 ').replace(/\bdet[ \t]?\(([A-Z])\)/g, ' the determinant of $1 ');
 
   // --- markdown ---
   s = s.replace(/```[\s\S]*?```/g, ' (the code is on screen) ');
-  s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  // a link's target is a URL, a path or an anchor: [(p₂ − p₁)/p₂](H − h₁) is maths, not a link
+  s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\((?:[a-z]+:|\/|#|\.\.?\/|[\w-]+\.(?:html?|md|pdf|png|jpe?g|svg)\b)[^)\s]*(?:\s+"[^"]*")?\)/g, '$1');
   s = s.replace(/\bhttps?:\/\/\S+/g, 'the link on screen');
   // HTML a reading may carry (tables): rows and cells become pauses, tags go
-  s = s.replace(/<\/(tr|p|li|h\d|div)>|<br\s*\/?>/gi, '. ').replace(/<\/t[dh]>/gi, ', ').replace(/<[^>]+>/g, ' ');
+  s = s.replace(/<\/(tr|p|li|h\d|div)>|<br\s*\/?>/gi, '. ').replace(/<\/t[dh]>/gi, ', ').replace(/<\/?[A-Za-z][^<>]*>/g, ' ');   // a tag starts with a name: "< 0 … > 0" is two comparisons
   s = s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
   // [2nd] [DMS]: key names in square brackets are read as the key; a bracket is a bracket
   s = s.replace(/\[/g, '(').replace(/\]/g, ')');
@@ -264,6 +391,23 @@ function once(input) {
     .replace(/\\(Rightarrow|implies)\b/g, ' ⇒ ').replace(/\\(rightarrow|to)\b/g, ' → ').replace(/\\angle\b/g, ' ∠ ').replace(/\\circ\b/g, '°')
     .replace(/\\(sin|cos|tan|sec|csc|cot|log|ln|exp|arcsin|arccos|arctan)\b/g, '$1');
   s = s.replace(new RegExp('\\\\(' + LATEX_GREEK.join('|') + ')\\b', 'g'), (_, g) => ' ' + g.replace(/^var/, '').toLowerCase() + ' ');
+  // lim_{Δx→0}: "the limit as delta x goes to zero of"
+  s = s.replace(/\blim[ \t]?_[ \t]?[{(]([^{}()]*?)[ \t]*(?:→|->|\\to\b)[ \t]*([^{}()]*)[})]/g, ' the limit as $1 goes to $2 of ');
+  // Σ_{i=1}^{n} X_iY_{i+1}: "the sum of X sub i Y sub i plus one, for i from one to n" (the limits after the term)
+  for (let m; (m = /[Σ∑][ \t]?_[ \t]?[{(]?([A-Za-z])[ \t]?=[ \t]?([^{}()\s^]+)[})]?[ \t]?\^[ \t]?(?:[{(]([^{}()]+)[})]|([A-Za-z0-9]+))[ \t]?/.exec(s));) {
+    let k = m.index + m[0].length, depth = 0;
+    for (; k < s.length; k++) {
+      const c = s[k];
+      if ('([{'.includes(c)) depth++;
+      else if (')]}'.includes(c)) { if (depth-- === 0) break; }
+      else if (depth === 0 && (/[=,;]/.test(c) || (/[+\-−]/.test(c) && s[k - 1] === ' '))) break;
+    }
+    const end = s.slice(m.index + m[0].length, k).replace(/[ \t]+$/, '');
+    const lim = PAUSE + ' for ' + m[1] + ' from ' + m[2] + ' to ' + (m[3] || m[4]) + PAUSE;
+    s = s.slice(0, m.index) + ' the sum of ' + end + lim + ' ' + s.slice(m.index + m[0].length + end.length).replace(/^[ \t]+/, '');
+  }
+  // Σh_odds, Σh_evens: "the sum of the odd h's"
+  s = s.replace(/([A-Za-z])_(odd|even)s\b/g, "the $2 $1's");
   s = eachBrace(s, /([\^_])\{([^{}]*)\}/g, (_, op, x) => op + (x.length === 1 || /^-?\d+$/.test(x) ? x : '(' + x + ')'));
 
   // --- Unicode forms → one plain form ---
@@ -278,13 +422,73 @@ function once(input) {
     return (w ? w + ' and ' : '') + cardinal(String(num)) + ' ' + part;
   });
   s = s.replace(/⁄/g, '/');
+  // a matrix written by its general element: A + B = [a_ij + b_ij] "element by element, …";
+  // I = (a_ij), 1 on the diagonal, 0 elsewhere: "ones on the diagonal, zeros elsewhere"
+  s = s.replace(/=[ \t]*[[(]([^[\]()]*_\{?ij\}?[^[\]()]*[+\-−][^[\]()]*)[\])]/g, '= element by element' + PAUSE + ' $1').replace(/=[ \t]*\(([a-z])_\{?ij\}?\)/g, '= the matrix of elements $1_ij')
+    .replace(/\b1 on the diagonal/g, 'ones on the diagonal').replace(/\b0 elsewhere\b/g, 'zeros elsewhere');
+  // (exact) after a value: "exactly"
+  s = s.replace(/[ \t]*\(exact(?:ly)?\)/g, ', exactly');
+  // [A][A]⁻¹, A⁻¹: a matrix and its inverse
+  for (let p; (p = s.replace(/\(([A-Z])\)(⁻¹)?\(([A-Z])\)/, '$1$2 × ($3)')) !== s;) s = p;
+  s = s.replace(/\(([A-Z])\)(?=⁻¹)/g, '$1').replace(/(^|[^A-Za-z])([A-Z])⁻¹/g, '$1$2 inverse');
+  // derivatives: dy/dx "d y by d x", ∂z/∂x "the partial derivative of z with respect to x", max at, min at
+  s = s.replace(/∂[ \t]?([A-Za-z](?:\([^()]*\))?)[ \t]?\/[ \t]?∂[ \t]?([A-Za-z])\b/g, ' the partial derivative of $1 with respect to $2 ')
+    .replace(/\bd²[ \t]?([A-Za-z])[ \t]?\/[ \t]?d([A-Za-z])²/g, ' the second derivative of $1 with respect to $2 ')
+    .replace(/(?<![A-Za-z])d[ \t]?\(([^()]+)\)[ \t]?\/[ \t]?d([A-Za-z])\b/g, ' the derivative of $1 with respect to $2 ')
+    .replace(/(?<![A-Za-z])d([A-Za-z])[ \t]?\/[ \t]?d([A-Za-z])\b/g, 'd $1 by d $2')
+    .replace(/\b(max|min)(?= at\b)/g, (m) => (m === 'max' ? 'maximum' : 'minimum')).replace(/\binflection at\b/g, 'inflection point at');
+  // ranges: 0–90, 1.1–1.6, Parts 1–5 are "to"; north–south is a pair of words
+  // (a path of points, A–B–C–D, is "A to B to C to D")
+  s = s.replace(/\bN[–-]S\b/g, 'north-south').replace(/\bE[–-]W\b/g, 'east-west').replace(/\b(mm|cm|m|km|ft|mi|in)–(?=(?:mm|cm|m|km|ft|mi|in)\b)/g, '$1 to ');
+  s = s.replace(/(\d)[ \t]?–[ \t]?(?=\.?\d)/g, '$1 to ').replace(/(^|[^A-Za-z])([A-Z][₀-₉0-9]*|[A-Z]{2})(?=–[A-Z](?![a-z]))/g, '$1$2 to').replace(/(?<=\bto)–/g, ' ')
+    .replace(/(\d[ \t]?(?:[a-z]{1,3}|°|%))[ \t]?–[ \t]?(?=\d)/g, '$1 to ').replace(/([A-Za-z] ?\d+)[ \t]?–[ \t]?(?=[A-Za-z][A-Za-z ]{0,6}\d)/g, '$1 to ')
+    .replace(/([A-Za-z])–(?=[A-Za-z])/g, '$1-');
+  // … in a series: h₂ + h₃ + … + hₙ "and so on"; between two values of one kind (T1N … T5N, 0.0 … 3.0), "to"
+  const SHAPE = (t) => t.replace(/[\d₀-₉ₙₘᵢⱼₖ₋₊.,⁰-⁹⁻ⁿ]/g, '');
+  s = s.replace(/[ \t]*[+\-×][ \t]*…[ \t]*(?=[+\-×])/g, PAUSE + ' and so on' + PAUSE + ' ')
+    .replace(/[ \t]*([+\-×,])[ \t]*…[ \t]*,?[ \t]*(?=[)\]};]|$)/gm, PAUSE + ' and so on')
+    .replace(/,[ \t]*…[ \t]*,[ \t]*/g, ', and so on, ')
+    .replace(/([,;])[ \t]*…[ \t]*(?=[A-Z0-9])/g, '$1 and so on to ')
+    .replace(/([,;])[ \t]*…[ \t]*(?=[a-z])/g, '$1 and so on' + PAUSE + ' ')
+    .replace(/[ \t]+…[ \t]*(?=[)\]])/g, PAUSE + ' and so on')
+    .replace(/([A-Za-z])[ \t]+…[ \t]+(?=\d)/g, '$1 to ')
+    .replace(/(\S+)[ \t]+…[ \t]+(\S+)/g, (m, a, b) => {
+      const A = a.replace(/[,;:]$/, ''), B = b.replace(/[,;:.)]+$/, '');
+      return /[\d₀-₉]/.test(A) && /[\d₀-₉ₙ]/.test(B) && SHAPE(A) === SHAPE(B) ? a + ' to ' + b : m;
+    })
+    .replace(/\)[ \t]*…[ \t]*(?=\d)/g, ') to ');
+  // a letter struck through (the NFPA diamond's W̶: water-reactive)
+  s = s.replace(/([A-Za-z])̶/g, '$1 with a bar through it');
   // calculator statistics keys and results: Σ+ "sigma plus", σxn−1 "sigma x n minus one", Sx "s x"
   s = s.replace(/Σ\s?\+(?![\d(A-Za-z])/g, ' sigma plus ').replace(/σx?n\s?[-−]\s?1\b/g, (m) => (/x/.test(m) ? ' sigma x n minus one ' : ' sigma n minus one '))
     .replace(/σxn\b/g, ' sigma x n ').replace(/σx\b/g, ' sigma x ').replace(/\b([Ss])x\b(?![²³^])/g, '$1 x');
+  // Σ standing for a matrix (Σ = [σ_x² σ_xy; …]) is its name, not "the sum of"
+  s = s.replace(/(^|[\s(:;,])Σ(?=[ \t]*=)/gm, '$1capital sigma');
   // nΣ, 2Σh₂: "n times the sum of", "two times the sum of"
   s = s.replace(/([A-Za-z0-9)\]])(?=[Σ∑])/g, '$1 times ');
+  // letters written together in a formula are letters: Ax + By, xB/p, rh/H, bc sin A, dy/dx
+  s = lettersApart(s);
+  // f(x + Δx), f′(a), ∂f(x, y), F(x): a function of what is in the bracket, not a product
+  s = functionsOf(s);
+  // ½at², ½[…]: one half times …
+  s = s.replace(/(^|[^\dA-Z])([½⅓⅔¼¾])(?:(?=[A-Za-z√α-ωΑ-Ω])|[ \t]?(?=\())/g, (m, p, c, at, all) => p + c + (all[at + m.length] === '(' ? ' × ' : '×'));
+  // 208′ 8″ square, 5′ 10″ tall: feet and inches, not minutes and seconds
+  s = s.replace(/(?<![°\d.]\s?)(\d+(?:\.\d+)?)[ \t]?[′'](?:[ \t]?(\d+(?:\.\d+)?)[ \t]?[″"])?(?=[ \t]*(?:square|long|wide|high|deep|tall|by|×|x\b|of (?:frontage|depth)))/g,
+    (_, f, i) => f + (f === '1' ? ' foot' : ' feet') + (i ? ' ' + i + (i === '1' ? ' inch' : ' inches') : ''));
+  // dimensions: 165 × 264 ft, n × n: "by"
+  s = s.replace(/(\d[\d,]*(?:\.\d+)?)[ \t]?[×x][ \t]?(?=\d[\d,]*(?:\.\d+)?[ \t]?(?:ft|feet|foot|m|in|inches|mi|yd|chains?|rods?|cm|mm|km)\b)/g, '$1 by ')
+    .replace(/(^|[\s(])([mnMN])[ \t]?×[ \t]?([mnqpMN])(?![\w(])/g, '$1$2 by $3');
+  // a matrix written by rows, [a b; c d]: its rows; |a b; c d| is its determinant
+  s = s.replace(/([[(|])([^[\]()|=;\n]+(?:;[^[\]()|=;\n]+)+)([\])|])/g, (m, o, body, c) => {
+    const rows = body.split(';').map((r) => r.trim().split(/\s+/));
+    const cell = (x) => /^[-−]?\d+(?:\.\d+)?$/.test(x) || /^[-−]?[A-Za-zα-ωΑ-Ω](?:_\{?[A-Za-z0-9]+\}?|[₀-₉ₙᵢⱼₖ]+)?[²³]?$/.test(x);
+    if (rows.length < 2 || rows.some((r) => r.length !== rows[0].length || r.length < 2) || !rows.flat().every(cell)) return m;
+    const ORDS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth'];
+    const say = 'the matrix with ' + rows.map((r, n) => r.slice(0, -1).join(', ') + ' and ' + r[r.length - 1] + ' on the ' + (ORDS[n] || 'next') + ' row').join('; ') + PAUSE;
+    return o === '|' && c === '|' ? ' the determinant of ' + say : ' ' + say;
+  });
   // the symbol a ("a = 3", "a₁", "a·x²", "a − b") is "ay"; the article a ("a plus sign") is not
-  s = s.replace(/(?<![A-Za-z0-9'’.])a(?![A-Za-z0-9'’])(?=\s*(?:[=+×·∙⋅*/÷^²³₀-₉≤≥≠≈<>±]|[-−–]\s)|_)|(?<=(?:[=+−×·∙⋅*/÷≤≥≠≈<>±(]|(?:^|[\s(=])-)\s*)a(?![A-Za-z0-9'’-])(?!\s+[a-z]{2,})/g, 'ay');   // not "tangent-of-a-difference"
+  s = s.replace(/(?<![A-Za-z0-9'’._])a(?![A-Za-z0-9'’])(?=\((?=[^()]*[-+−×/])|\s*(?:[=+×·∙⋅*/÷^²³₀-₉≤≥≠≈<>±]|[-−–]\s)|_)|(?<=(?:[=+−×·∙⋅*/÷≤≥≠≈<>±(]|(?:^|[\s(=])-)\s*)a(?![A-Za-z0-9'’\uE000-])(?!\s+[a-z]{2,})/g, 'ay');   // not "tangent-of-a-difference"
   // 1 in. Hg: "one inch of mercury"; per °C: "per degree Celsius"
   s = s.replace(/(\d[\d.,]*)\s?in\.?\s?Hg\b/g, (_, n) => n + (n === '1' ? ' inch' : ' inches') + ' of mercury');
   s = s.replace(/\bper\s?°\s?([FC])\b/g, (_, u) => 'per degree ' + (u === 'F' ? 'Fahrenheit' : 'Celsius'));
@@ -293,14 +497,52 @@ function once(input) {
   // the HP 33s / 35s shift keys
   s = s.replace(/↰/g, ' left shift ').replace(/↱/g, ' right shift ');
   // 10 in = 25.4 mm, 33⅓ in: "in" is inches only where it cannot be the word "in"
-  s = s.replace(/(\d[½⅓⅔¼¾⅛⅜⅝⅞]?)\s?in\b(?=\s*(?:[=,;:)×+\-\/]|\.(?!\d)|$))/g, '$1 inches');
-  // PLSS aliquot parts: NE¼ → the northeast quarter, N½ → the north half
+  s = s.replace(/(^|[^\d.,])?(\d[\d,]*(?:\.\d+)?[½⅓⅔¼¾⅛⅜⅝⅞]?)\s?(?:in\.(?=\s*[=,;:()×+\-\/a-z])|in\b(?=\s*(?:[=,;:()×+\-\/]|\.(?!\d)|$)))/g, (m, p, n) => (p || '') + n + (n === '1' ? ' inch' : ' inches'));
+  // in², in³ with no number: "square inches"
+  s = s.replace(/(?<![\w^])in[ \t]?(?:²|\^2)(?!\w)/g, 'square inches').replace(/(?<![\w^])in[ \t]?(?:³|\^3)(?!\w)/g, 'cubic inches');
+  s = s.replace(/\b(in|of|per) psi\b/g, '$1 pounds per square inch').replace(/\bpts?[ \t]?\/[ \t]?m(?:²|\^2)/g, 'points per square meter');
+  // abbreviations a voice would read letter by letter or as another word
+  s = s.replace(/\bsq\.[ \t]?(?=(?:feet|foot|yards?|yds?\.?|rods?|chains?|miles?|mi\b|inch|inches|in\.|links?|meters?|metres?|km\b|ft\b|ch\b))|\bsq[ \t](?=(?:feet|foot|yards?|rods?|chains?|miles?|inch|inches|links?|meters?|metres?)\b)/g, 'square ')
+    .replace(/\b(miles?|feet|chains?|rods?)[ \t]sq\.?(?=[ \t]|$)/g, '$1 square')
+    .replace(/(\d[\d,]*(?:\.\d+)?[½¼¾]?[ \t]?(?:square )?)yds?\.?(?![\w²³^])/g, (m, n) => n + (/^1[ \t]/.test(n) ? 'yard' : 'yards'))
+    .replace(/\bsquare yds?\.?(?!\w)/g, 'square yards')
+    .replace(/(?:(\d[\d,]*(?:\.\d+)?[½¼¾]?)[ \t]?)?\b(square|cubic) (ft|mi|in|km|ch|yd|m)\b\.?/g, (m, n, k, u) => (n ? n + ' ' : '') + k + ' ' + ({ ft: ['foot', 'feet'], mi: ['mile', 'miles'], in: ['inch', 'inches'], km: ['kilometer', 'kilometers'], ch: ['chain', 'chains'], yd: ['yard', 'yards'], m: ['meter', 'meters'] })[u][n === '1' ? 0 : 1])
+    .replace(/\bcat\.[ \t]?(?=\d)/g, 'category ').replace(/\bpp\.[ \t]?(?=\d)/g, 'pages ').replace(/(^|[\s(])p\.[ \t]?(?=\d)/g, '$1page ')
+    .replace(/\b(Handbook|handbook) (pp?)\.(?=\s*$)/g, (_, h, p) => h + (p === 'pp' ? ' pages' : ' page'))
+    .replace(/\bNo\.[ \t]?(?=\d)/g, 'number ').replace(/\bapprox\.(?=\s)/g, 'approximately').replace(/\bvs\.(?=\s)/g, 'versus')
+    .replace(/\bmg\/kg\b/g, 'milligrams per kilogram');
+  // engineering-economy factors: (F/P, i%, n) is "F given P at i percent for n periods"
+  // (a letter written against one multiplies it: A = P(A/P, i%, n) is "P times A given P …")
+  const econTimes = (all, at) => (/(?:^|[^A-Za-z])[A-Za-z][ \t]?$|[0-9)][ \t]?$/.test(all.slice(0, at)) ? ' times ' : '');
+  s = s.replace(/\(([FPAG])\/([FPAG]),\s?(i|\d+(?:\.\d+)?)\s?%,\s?(n|N|\d+)\)/g, (m, a, b, i, n, at, all) => econTimes(all, at) + a + ' given ' + b + ' at ' + i + ' percent for ' + n + (n === '1' ? ' period' : ' periods'));
+  // (F/A), and F/G where the line holds other factors too: "F given A"
+  s = s.replace(/\(([FPAG])\/([FPAG])\)/g, (m, a, b, at, all) => econTimes(all, at) + '(' + a + ' given ' + b + ')');
+  if ((s.match(/(?<![\w/])[FPAG]\/[FPAG](?![\w/])|\b[FPAG] given [FPAG]\b/g) || []).length > 1) s = s.replace(/(?<![\w/])([FPAG])\/([FPAG])(?![\w/])/g, '$1 given $2');
+  // FGCS order and class, accuracy classes: "class I" is "class one" (a lone I would be read as the word "I")
+  s = s.replace(/\b([Cc]lass|[Oo]rder|[Tt]ype|[Gg]rade|[Ss]tandard|[Pp]hase|[Ll]evel|[Tt]ier|[Ss]ection)\s+I\b(?![''’.])/g, '$1 one');
+  // 2-D, 3-D, 4-D, 5-D (dimensions, BIM): "three D", never "three minus D"
+  s = s.replace(/\b([2-5])-D\b/g, (_, d) => ({ 2: 'two', 3: 'three', 4: 'four', 5: 'five' })[d] + ' D');
+  // PLSS: T2N, R3E; the C¼ (center quarter) and 1/16 (sixteenth) corners; NE 1/4 written out
+  s = s.replace(/\bT\.?\s?(\d{1,3})\s?([NS])\b\.?/g, (_, n, d) => 'Township ' + n + (d === 'N' ? ' North' : ' South'))
+    .replace(/\bR\.?\s?(\d{1,3})\s?([EW])\b\.?/g, (_, n, d) => 'Range ' + n + (d === 'E' ? ' East' : ' West'));
+  s = s.replace(/\b([NSEW])\s?(?:¼|1\/4)\s?(?=cor(?:ner)?\b)/g, (_, q) => ({ N: 'north', S: 'south', E: 'east', W: 'west' })[q] + ' quarter ')
+    .replace(/\bC\s?(?:¼|1\/4)(?=\s|$)/g, 'center quarter')
+    .replace(/(?:¼|1\/4)\s?cor(?:ner)?\b\.?/g, 'quarter corner').replace(/\b1\/16\s?cor(?:ner)?\b\.?/g, 'sixteenth corner')
+    .replace(/\bquarter cor\b\.?/g, 'quarter corner');
+  s = s.replace(/\b(NE|NW|SE|SW|[NSEW])\s?1\/([24])\b/g, (_, q, d) => q + (d === '4' ? '¼' : '½'));
+  // PLSS aliquot parts: NE¼ → the northeast quarter, N½ → the north half; NE¼SW¼ is
+  // "the northeast quarter of the southwest quarter"
   const QUARTER = { NE: 'northeast', NW: 'northwest', SE: 'southeast', SW: 'southwest', N: 'north', S: 'south', E: 'east', W: 'west' };
-  s = s.replace(/\b(NE|NW|SE|SW)\s?¼/g, (_, q) => QUARTER[q] + ' quarter').replace(/\b([NSEW])\s?½/g, (_, q) => QUARTER[q] + ' half');
+  const ALIQUOT = /(?:NE|NW|SE|SW)\s?¼|[NSEW]\s?½/g;
+  s = s.replace(/\b(?:(?:NE|NW|SE|SW)\s?¼|[NSEW]\s?½)(?:,?\s*(?:of\s+(?:the\s+)?)?(?:(?:NE|NW|SE|SW)\s?¼|[NSEW]\s?½))*/g,
+    (m) => m.match(ALIQUOT).map((t) => QUARTER[t.replace(/\s?[¼½]/, '')] + (t.indexOf('¼') > -1 ? ' quarter' : ' half')).join(' of the '));
+  // (…)^½: "to the power of one half"
+  s = s.replace(/\^[ \t]?([½⅓¼])/g, (_, c) => '^(' + { '½': '1/2', '⅓': '1/3', '¼': '1/4' }[c] + ')');
   // 33⅓ → thirty-three and one third
-  s = s.replace(/(\d)([½⅓⅔¼¾⅛⅜⅝⅞])/g, (_, d, c) => d + ' and' + FRACTIONS[c]);
-  s = s.replace(/[½⅓⅔¼¾⅛⅜⅝⅞]/g, (c) => FRACTIONS[c]);
-  s = s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻ]+/g, (m) => { const x = m.split('').map((c) => SUP[c]).join(''); return '^' + (x.length > 1 && !/^-?\d+$/.test(x) ? '(' + x + ')' : x); });
+  s = s.replace(/(\d)([½⅓⅔¼¾⅛⅜⅝⅞⅕⅖⅗⅘⅙⅚⅐⅑⅒])/g, (_, d, c) => d + ' and' + FRACTIONS[c]);
+  s = s.replace(/[½⅓⅔¼¾⅛⅜⅝⅞⅕⅖⅗⅘⅙⅚⅐⅑⅒]/g, (c) => FRACTIONS[c]);
+  // (sin²35°: the power is 2, then the angle, so a digit after it is kept apart)
+  s = s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻ]+/g, (m, at, all) => { const x = m.split('').map((c) => SUP[c]).join(''); return '^' + (x.length > 1 && !/^-?\d+$/.test(x) || /\d/.test(all[at + m.length] || '') ? '(' + x + ')' + (/\d/.test(all[at + m.length] || '') ? ' ' : '') : x); });
   // braced, so XᵢYᵢ₊₁ is "X sub i, Y sub i plus one", not "X sub iY"
   s = s.replace(/[₀₁₂₃₄₅₆₇₈₉ₙᵢⱼₖₓₐₑₒₘₚₛₜₕₗᵣᵤᵥ₋₊₌₍₎]+/g, (m) => '_{' + m.split('').map((c) => SUB[c]).join('') + '}');
   s = s.replace(/([A-Za-z])̄/g, '$1 bar').replace(/([A-Za-z])̂/g, '$1 hat').replace(/([A-Za-z])̇/g, '$1 dot');
@@ -351,7 +593,7 @@ function once(input) {
   // "b is 40, s is 2" and "b + 2 s c" are not seconds: a bare s is seconds only where the phrase ends
   s = s.replace(UNIT_RE, (m, n, sp, u, at, all) => (/,$/.test(n) || (u === 's' && !/^\s*(?:[,;:.)(=]|$|travel\b|per\b)/.test(all.slice(at + m.length))) ? m
     : sp || TIGHT.test(u) ? unitWords(n, u) : m));
-  s = s.replace(/(\d)[ \t]h\b(?=\s+\d|\s*=)/g, (_, d, at, all) => d + (d === '1' && !/[\d.]$/.test(all.slice(0, at)) ? ' hour' : ' hours'));   // 5 h 20 min, 1 h = 60 min
+  s = s.replace(/(\d)[ \t]h\b(?=\s+\d|\s*=|\s*[;,.)]|\s*$|\s+(?:total|of|per|each|and|or|to|a|in|at|on)\b)/g, (_, d, at, all) => d + (d === '1' && !/[\d.]$/.test(all.slice(0, at)) ? ' hour' : ' hours'));   // 5 h 20 min, 1 h = 60 min
   // a unit with no number: V(yd³) "V in cubic yards", "(ft)", "300-ft", "the US survey ft", "ft²"
   s = s.replace(/\b([A-Z])[ \t]?\((ft|yd|m)[ \t]?\^[ \t]?([23])\)/g, (_, v, u, p) => v + ' in ' + (p === '2' ? 'square ' : 'cubic ') + { ft: 'feet', yd: 'yards', m: 'meters' }[u] + ' ')
     .replace(/\b([A-Z])[ \t]?\(sq\.? ?(ch|ft)\)/g, (_, v, u) => v + ' in square ' + (u === 'ch' ? 'chains ' : 'feet '));
@@ -371,11 +613,17 @@ function once(input) {
   s = s.replace(/\b(sin|cos|tan|sec|csc|cot)\s?\^\(?-1\)?/g, 'arc$1');
   // R tan(I/2), 2R sin(I/2): a quantity times a function
   // (not the keys "R C L tan": a spelled abbreviation is not a quantity)
-  s = s.replace(/(^|[\s=(])(?<![A-Z] )(\d+(?:\.\d+)?[A-Za-z]?|[B-Z])[ \t]+(?=(?:sin|cos|tan|sec|csc|cot)\b)/g, '$1$2 times ');
+  // x sec θ, b c sin A, a² sin B sin C, n′ sin φ′, 2arccos: a quantity times a function
+  s = s.replace(/(^|[\s=(,]|[^\sA-Za-z0-9'’])(?<![A-Z] )(\d+(?:\.\d+)?[A-Za-z]?|ay|[B-Zb-z](?:\^\d)?['′″]*|squared|cubed)(?:[ \t]+|(?<=\d)(?=arc))(?=(?:arc)?(?:sin|cos|tan|sec|csc|cot)\b)/g, '$1$2 times ');
   // "the sine of" only before what it is taken of: a bracket, a number, a root, one letter or
   // an angle's name. "the tan key", "tan of I", "arctan cannot" keep their own words.
-  s = s.replace(/\b(arcsin|arccos|arctan|sin|cos|tan|sec|csc|cot|log|ln)\b\s?(\^\(?\d+\)?)?\s?(?=[(0-9√]|[A-Za-zα-ωΑ-Ω](?![A-Za-z])|(?:Az|azimuth|Lat|Dep|latitude|departure|alpha|beta|theta|delta|phi|Delta|zee)\b)/g,
-    (_, f, p) => ' the ' + FUNCS[f] + (p ? ' ' + p : '') + ' of ');
+  s = s.replace(/\b(arcsin|arccos|arctan|sin|cos|tan|sec|csc|cot|log|ln)\b\s?(\^\(?\d+\)?)?\s?(?=[(0-9√]|[A-Za-zα-ωΑ-Ω](?![A-Za-z])|(?:ay|Az|azimuth|Lat|Dep|latitude|departure|alpha|beta|theta|delta|phi|Delta|zee)\b)/g,
+    (_, f, p) => {
+      const n = p ? p.replace(/[^\d]/g, '') : '';
+      return ' the ' + FUNCS[f] + (p ? (n === '2' ? ' squared' : n === '3' ? ' cubed' : ' to the power ' + n) : '') + ' of ';
+    });
+  // R(1/cos(I/2) − 1): "one over the cosine of I over two, minus one"
+  s = s.replace(/((?:\/|\bover)[ \t]* the (?:inverse )?(?:sine|cosine|tangent|secant|cosecant|cotangent|log|natural log)(?: squared| cubed)? of \([^()]*\))(?=[ \t]*[-+−][ \t])/g, '$1' + PAUSE);
   s = s.replace(/\b(arcsin|arccos|arctan|sin|cos|tan|sec|csc|cot)\b/g, (f) => FUNCS[f]);
   // σ√n: "sigma times the square root of n"
   s = s.replace(/([A-Za-z0-9)α-ωΑ-Ω])√(?=[(A-Za-z0-9.α-ωΣΔ∑])/g, '$1 times √');
@@ -385,19 +633,37 @@ function once(input) {
   s = s.replace(/√\s?([ΣΔ∑]?[A-Za-z0-9.α-ω]+)/g, ' the square root of $1 ');               // √Σw too
 
   // --- powers, subscripts ---
-  s = eachBrace(s, /\(([^()]*)\)\s?\^/g, (_, x) => (HAS_OP.test(x) ? ' the quantity ' + x + ', ' : x) + ' ^');
+  // (1 + i)ⁿ, P(1 + i)ⁿ: "P times the quantity one plus i, to the power of n"
+  s = eachBrace(s, /\(([^()]*)\)\s?\^/g, (_, x, at, all) => (HAS_OP.test(x) ? (factorBefore(all.slice(0, at)) ? ' times' : '') + ' the quantity ' + x + PAUSE + ' ' : x) + ' ^');
+  // a sum or difference divided, or dividing: (g₂ − g₁)/(2L) is "the quantity g two minus g one, over two L";
+  // L(A₁ + A₂)/2 is "L times the quantity …"; h(area of base)/3 is "h times the area of base, over three"
+  const SUMOP = /[+\-−]|\b(plus|minus)\b/;
+  s = eachBrace(s, /\(([^()]*)\)[ \t]*\/(?!\/)/g, (_, x, at, all) => {
+    const f = factorBefore(all.slice(0, at));
+    if (SUMOP.test(x)) return (f ? ' times' : '') + ' the quantity ' + x + PAUSE + ' /';
+    if (f && /^[a-z]{3,}(?: [a-z]+)+$/.test(x.trim())) return ' times ' + (/^(?:the|a|an) /.test(x.trim()) ? '' : 'the ') + x.trim() + PAUSE + ' /';
+    return x + ' /';
+  });
+  s = eachBrace(s, /\/[ \t]*\(([^()]*)\)/g, (_, x) => (SUMOP.test(x) ? '/ the quantity ' + x + PAUSE : /\S\s+\S|\d[A-Za-z]/.test(x.trim()) ? '/ (' + x + ')' : '/ ' + x));
   // a closing bracket is taken only with its opening one: Σ(v^2) keeps its )
   // (a space after it when a letter follows: w²L³ is "w squared L cubed"; XᵢYᵢ is "X sub i Y sub i")
   const gap = (all, end) => (/[A-Za-z0-9(α-ωΑ-Ω√]/.test(all[end] || '') ? ' ' : '');
   const power = (neg, p) => (neg ? ' to the negative ' + p : p === '2' ? ' squared' : p === '3' ? ' cubed' : ' to the power of ' + p);
-  s = s.replace(/\s?\^\s?\(\s?(-?)\s?(\d+(?:\.\d+)?|[A-Za-z])\)/g, (m, neg, p, at, all) => power(neg, p) + gap(all, at + m.length));
-  s = s.replace(/\s?\^\s?(-?)\s?(\d+(?:\.\d+)?|[A-Za-z])/g, (m, neg, p, at, all) => power(neg, p) + gap(all, at + m.length));
-  s = s.replace(/\s?\^\s?\(([^()]*)\)/g, ' to the power of $1,');
+  // (x − h)² + …, (1 + i)ⁿ − 1, xⁿ − 1: a pause after the power, so "n minus one" is not heard as the power
+  const pw = (m, neg, p, at, all) => {
+    const w = power(neg, p), after = all.slice(at + m.length);
+    const pause = /^[ \t]*[-+−]/.test(after) && (all.slice(0, at).trimEnd().endsWith(PAUSE) || !/squared|cubed/.test(w)) ? PAUSE : '';
+    return w + pause + gap(all, at + m.length);
+  };
+  s = s.replace(/\s?\^\s?\(\s?(-?)\s?(\d+(?:\.\d+)?|[A-Za-z])\)/g, pw);
+  s = s.replace(/\s?\^\s?(-?)\s?(\d+(?:\.\d+)?|[A-Za-z])/g, pw);
+  s = s.replace(/\s?\^\s?\(([^()]*)\)/g, ' to the power of $1' + PAUSE);
   s = implicitTimes(s);
-  // a subscript abbreviation is spelled: Y_PVC "Y sub P V C", C_std "C sub s t d"; a word stays (Az_next "sub next")
-  const subx = (x) => (/^[A-Z]{2,5}$/.test(x) || (/^[a-z]{2,4}$/.test(x) && !/[aeiouy]/.test(x)) ? x.split('').join(' ') : x);
-  s = s.replace(/([A-Za-zα-ωΑ-Ω])_[({]([^)}]*)[)}]/g, (m, v, x, at, all) => v + ' sub ' + subx(x) + gap(all, at + m.length));   // Y_{i+1}, h_(n-1)
-  s = s.replace(/([A-Za-zα-ωΑ-Ω])_([A-Za-z0-9]+)/g, (m, v, x, at, all) => v + ' sub ' + subx(x) + gap(all, at + m.length));
+  // a subscript abbreviation is spelled: Y_PVC "Y sub P V C", C_std "C sub s t d", σ_xy "sigma sub x y";
+  // a word stays (Az_next "sub next"); the variable a is "ay" there too
+  const subx = (x) => (x === 'a' ? 'ay' : /^[A-Z]{2,5}$/.test(x) || (/^[a-z]{2}$/.test(x) && !/^(?:on|in|up|at|to|of|by|or|is|it)$/.test(x)) || (/^[a-z]{3,4}$/.test(x) && !/[aeiouy]/.test(x)) ? x.split('').map((c) => (c === 'a' ? 'ay' : c)).join(' ') : x);
+  s = s.replace(/([A-Za-zα-ωΑ-Ω])_[({]([^)}]*)[)}]/g, (m, v, x, at, all) => v + ' sub ' + subx(x) + (/[-+]/.test(x) && /^[ \t]*[-+]/.test(all.slice(at + m.length)) ? PAUSE : '') + gap(all, at + m.length));   // Y_{i+1}, h_(n-1)
+  s = s.replace(/([A-Za-zα-ωΑ-Ω])_([a-z0-9]+(?![A-Za-z0-9])|[a-z0-9]+(?=[A-Z])|[A-Za-z0-9]+)/g, (m, v, x, at, all) => v + ' sub ' + subx(x) + gap(all, at + m.length));
   // a root whose inside still had brackets the first time: read it now the inside is plain
   s = roots(s);
 
@@ -406,17 +672,39 @@ function once(input) {
   s = s.replace(/\bN\/A\b/g, 'not applicable').replace(/\b(and)\/(or)\b/g, 'and or');
   // 400/−300 is "over negative three hundred"; "√(A × E) / √(…)" keeps its "over" after the quantity's comma
   s = s.replace(new RegExp('(' + OPERAND + ')[ \\t]*/[ \\t]*(?=[A-Za-z0-9(α-ωΑ-Ω√]|-[ \\t]?[\\d.(A-Za-z])', 'g'), '$1 over ').replace(/,[ \t]*\/[ \t]*(?=\S)/g, ', over ');
-  // |x|: the absolute value
+  // "the quantity h one plus h n, over two, plus h two": the fraction ends before the next term
+  s = s.replace(new RegExp(PAUSE + '( over [A-Za-z0-9.]+(?: (?:squared|cubed))?)(?=[ \\t]*[-+][ \\t])', 'g'), PAUSE + '$1' + PAUSE);
+  // |A|: one capital is a matrix, so its determinant; anything else is an absolute value
+  // |A| is a determinant only where the text is about matrices; |E| ≤ E_allow is an absolute value
+  const matrixTalk = /\b(matri(x|ces)|determinant|inverse|adjoint|transpose|cofactor|row|column)\b|[A-Z]ᵀ|[A-Z]⁻¹/i.test(s);
+  s = s.replace(/\bdeterminant\s+\|([A-Z])\|/g, 'determinant of $1');
+  // (the course names its matrices A, B, C, M and N; |E|, |D|, |P| and the like are sizes)
+  s = s.replace(/\|([A-Z])\|/g, (m, x) => (matrixTalk || /[ABCMN]/.test(x) ? ' the determinant of ' + x + ' ' : m));
   s = s.replace(/\|([^|\n]+)\|/g, ' the absolute value of $1 ');
   // ⌊x⌋: rounded down (the UTM zone number)
   s = s.replace(/⌊([^⌊⌋\n]+)⌋/g, ' the whole-number part of $1, ').replace(/[⌊⌋]/g, ' ');
+  // ⌈x⌉: rounded up (sessions, photos, flight lines: a part of one is a whole one)
+  s = s.replace(/⌈([^⌈⌉\n]+)⌉/g, ' $1, rounded up to a whole number, ').replace(/[⌈⌉]/g, ' ');
   s = s.replace(/([A-Za-z]{2,})\/([A-Za-z]{2,})/g, '$1 or $2');
 
   // --- operators ---
   s = s.replace(/<=/g, ' ≤ ').replace(/>=/g, ' ≥ ').replace(/!=|=\/=/g, ' ≠ ').replace(/==/g, ' = ');
-  s = s.replace(/(\S)[ \t]*<[ \t]*(?=\S)/g, '$1 is less than ').replace(/(\S)[ \t]*>[ \t]*(?=\S)/g, '$1 is greater than ');
+  // (after a comma or a bracket the sign starts its own cell: "Caution (> 5,000)" is "greater than")
+  s = s.replace(/([^\s,;:(])[ \t]*<[ \t]*(?=\S)/g, '$1 is less than ').replace(/([^\s,;:(])[ \t]*>[ \t]*(?=\S)/g, '$1 is greater than ');
+  s = s.replace(/([,;:(])[ \t]*<[ \t]*(?=\S)/g, '$1 less than ').replace(/([,;:(])[ \t]*>[ \t]*(?=\S)/g, '$1 greater than ')
+    .replace(/(^|[,;:(])[ \t]*[≤⩽][ \t]*/gm, '$1 less than or equal to ').replace(/(^|[,;:(])[ \t]*[≥⩾][ \t]*/gm, '$1 greater than or equal to ');
+  // with nothing before it (a table cell "< 0", a list "> 6: poor") the sign reads on its own
+  s = s.replace(/(^|\s)<[ \t]*(?=\S)/g, '$1less than ').replace(/(^|\s)>[ \t]*(?=\S)/g, '$1greater than ');
   // "x ≈ 3" is "x is approximately three"; "gives ≈ 19" is "gives approximately nineteen"
   s = s.replace(/(\S*)[ \t]?[≈≅≃][ \t]?/g, (_, w) => w + (!w || /^(gives?|giving|gets?|got|is|are|was|were|be|of|to|at|about|by|equals|yields?|makes?|around|roughly|just|only|and|or|so|comes|works)$/i.test(w) ? ' approximately ' : ' is approximately '));
+  // →: 5.10 → 6.35 and NAD 27 → NAD 83 are "to"; "smaller → the ground rose" is "so"; a result is "which gives"
+  s = s.replace(/(\S*)[ \t]*(?:→|⟶)[ \t]*(?=(\S*)([ \t]*\S*))/g, (m, a, b, c) => {
+    const dec = (x) => ((/\.(\d+)/.exec(x) || ['', ''])[1].length);
+    if ((/^-?[\d.,]+$/.test(a) && /^-?[\d.,]*\d[.,;:]?$/.test(b) && dec(a) === dec(b.replace(/[.,;:]$/, ''))) || ((/^[A-Z][A-Za-z0-9]*$/.test(a) || /^(?:1[6-9]|20)\d\d$/.test(a)) && /^[A-Z]/.test(b) && !/^[ \t]*(?:=|equals)/.test(c))) return a + ' to ';
+    if (/^(?:ground|grid)\b/.test(b) && /(?:ground|grid)$/.test(a)) return a + ' to ';
+    if (/^[a-z]{2,}[.,;:]?$/.test(b) && /^[a-z]{2,}[*_]*$/i.test(a) && !/^(?:feet|foot|ft|meters?|m|miles?|degrees|minutes|seconds|percent|acres|inches|yards|chains|links|rods|station)$/.test(a) && !/^station/.test(b)) return a + ', so ';
+    return a + ', which gives ';
+  });
   for (const [re, say] of SYMBOLS) s = s.replace(re, say);
   s = s.replace(/[ \t]?=[ \t]?/g, ' equals ');
   s = s.replace(new RegExp('(' + OPERAND + '|squared|cubed)[ \\t]?\\*[ \\t]?(?=[A-Za-z0-9(α-ω])', 'g'), '$1 times ');
@@ -426,7 +714,7 @@ function once(input) {
   s = s.replace(new RegExp('(' + OPERAND + '|squared|cubed|bar|hat)[ \\t]+-[ \\t]+(?=[A-Za-z0-9(α-ωΑ-Ω√.])', 'g'), '$1 minus ');
   s = s.replace(/(^|[^A-Za-z])([A-Za-z]|\d|\))-(?=\d|\.\d|[A-Za-zα-ω](?![A-Za-z])|\()/g, '$1$2 minus ');
   s = s.replace(/\b(squared|cubed) -(?=[\d.(A-Za-z])/g, '$1 minus ');                 // x²-1
-  s = s.replace(/(^|[\s(\[,:])-[ \t]?(?=\d|\.\d|[A-Za-zα-ω](?![A-Za-z])|\(|√)/gm, '$1negative ');
+  s = s.replace(/(^|[\s(\[,:])-[ \t]?(?=\d|\.\d|[A-Za-zα-ω](?![A-Za-z])|ay\b|\(|√)/gm, '$1negative ');
   s = s.replace(/(^|[^+])\+(?!\+)/g, '$1 plus ');
   s = s.replace(/(?:\babout\s+)?~[ \t]?/g, 'about ');
   s = s.replace(/[α-ωΑ-ΩϕςΔ∆](?=['’]s\b)/g, (c) => ' ' + GREEK[c]);                   // δ's: "delta's"
@@ -451,8 +739,8 @@ function once(input) {
 
   // --- a lone "a" as a variable: say "ay", not "uh" (most were caught by their symbols above;
   // "a plus sign", "not a minus", "of a Fahrenheit degree" keep the article) ---
-  s = s.replace(/\ba\b(?=\s+(equals|squared|cubed|sub|to the power|is (less|greater|approximately)))/g, 'ay')
-    .replace(/\b(equals|times|over|root of)\s+a\b(?!\s+[A-Za-z]{2,})/g, '$1 ay');
+  s = s.replace(/\ba\b(?=\s+(equals|squared|cubed|sub|to the power|is (less|greater|approximately))\b)/g, 'ay')   // "a sub i", never "a subdivision"
+    .replace(/\b(equals|times|over|root of)\s+a\b(?![\uE000⸴]|\s+(?!(?:plus|minus|times|over|squared|cubed|sub|equals|is)\b)[A-Za-z])/g, '$1 ay');
 
   // −ΣLat, once the course says it "the sum of the latitudes": "minus the sum …"
   s = s.replace(/(^|[\s(\[,:])[-−][ \t]?(?=the\b)/gm, '$1minus ');
@@ -460,10 +748,13 @@ function once(input) {
   s = s.replace(/(^|[\s(])[-−](?=[\s),.;:]|$)/gm, '$1 minus ').replace(/(^|[\s(])\+(?=[\s),.;:]|$)/gm, '$1 plus ');
 
   // --- tidy ---
+  s = s.replace(/\uE000/g, ' ').replace(/⸴/g, ',').replace(/\b(the quantity )(?:the quantity )+/g, '$1');
+  // a word and its symbol said alike are said once: "φ (phi)", "Kappa (κ)", "degrees (°)", "two-peg (peg)", "the √n"
+  s = s.replace(/\b([A-Za-z]+)\s+\(\s*\1\s*\)/gi, '$1').replace(/\b(township|range)\s+(?=\1\b)/gi, '').replace(/\bthe\s+the\b/gi, (m) => m.slice(0, 3));
   // brackets around one thing are not heard: "the sum of (v)" → "the sum of v"
   s = s.replace(/\(\s*([A-Za-z-]+(?: (?:squared|cubed|bar|hat|sub [A-Za-z-]+))?)\s*\)/g, ' $1 ');
-  s = s.replace(/[{}\\|^_#*`]/g, ' ');
-  s = s.replace(/[ \t]+/g, ' ').replace(/ ([.,;:!?)])/g, '$1').replace(/\( /g, '(').replace(/,\s*,/g, ',').replace(/,\s*\./g, '.').replace(/,\s*\)/g, ')').replace(/(\w) -(?=[A-Za-z])/g, '$1-').replace(/\.{2,}(?!\.)/g, '.');
+  s = s.replace(/[{}\\|^_#*`]/g, ' ').replace(/\(\s*\)/g, '').replace(/[ \t]–[ \t]/g, ' — ').replace(/[,⸴][ \t]*(?=—)/g, ' ');
+  s = s.replace(/[ \t]+/g, ' ').replace(/ ([.,;:!?)])/g, '$1').replace(/\( /g, '(').replace(/,\s*,/g, ',').replace(/,\s*([.;:!?])/g, '$1').replace(/,\s*\)/g, ')').replace(/(\w) -(?=[A-Za-z])/g, '$1-').replace(/\.{2,}(?!\.)/g, '.');
   s = s.replace(/,[ \t]*$/gm, '').replace(/\n{2,}/g, '\n').replace(/[ \t]*\n[ \t]*/g, '\n');
   return s.trim();
 }

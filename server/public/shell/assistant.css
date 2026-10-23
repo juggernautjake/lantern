@@ -52,6 +52,16 @@ body[data-dock="bottom"] .as-head { width: 220px; flex-direction: column; }
 .as-msg.lantern { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
 .as-msg.lantern .eco-chip { margin-bottom: 4px; }
 .as-links { margin: 6px 0 0; padding-left: 18px; }
+/* say it again: under each of Lantern's messages; ■ while that message is being said */
+.as-replay { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin: 4px 0 -2px auto; padding: 0; border-radius: 999px; border: 1px solid transparent; background: transparent; color: var(--muted, var(--ink)); font: inherit; line-height: 1; cursor: pointer; opacity: .8; touch-action: manipulation; user-select: none; }
+.as-replay:hover, .as-replay:focus-visible { opacity: 1; border-color: var(--line); background: var(--surface, var(--bg)); }
+.as-replay::before { content: ''; width: 16px; height: 16px; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 5 6 9H3v6h3l5 4z' fill='black'/%3E%3Cpath d='M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 5 6 9H3v6h3l5 4z' fill='black'/%3E%3Cpath d='M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13'/%3E%3C/svg%3E") center / contain no-repeat; }
+.as-msg.saying .as-replay { opacity: 1; border-color: var(--accent); color: var(--accent); }
+.as-msg.saying .as-replay::before { width: 12px; height: 12px; -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='6' y='6' width='12' height='12' rx='2' fill='black' stroke='none'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='6' y='6' width='12' height='12' rx='2' fill='black' stroke='none'/%3E%3C/svg%3E"); }
+.as-msg.lantern.saying { box-shadow: 0 0 0 2px var(--accent-soft); }
+.as-msg.lantern.note { font-size: .95em; }
+@media (prefers-reduced-motion: no-preference) { .as-msg.saying .as-replay { animation: as-saying 1.4s ease-in-out infinite; } }
+@keyframes as-saying { 50% { box-shadow: 0 0 0 4px var(--accent-soft); } }
 .as-links li { margin: 3px 0; }
 
 .as-input { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); align-items: flex-end; }
@@ -164,6 +174,7 @@ body[data-lantern-mode="listen"] .as-status { color: var(--accent, #e8b84a); }
   /* Stop shows only while Lantern is talking or listening */
   body[data-dock="sheet"]:not([data-lantern-mode="speak"]):not([data-lantern-mode="listen"]) [data-testid=stop-speaking] { display: none; }
   body[data-dock="sheet"] .as-msg .btn { margin-top: 8px; }
+  body[data-dock="sheet"] .as-replay { width: 44px; height: 44px; margin: 2px -6px -8px auto; }
   body[data-dock="sheet"] .as-links li { margin: 8px 0; }
 
   /* the message box: the mic (when the browser can listen), the text, Send */
@@ -194,3 +205,42 @@ body[data-lantern-mode="listen"] .as-status { color: var(--accent, #e8b84a); }
   body[data-dock="sheet"] .as-lamp { width: 26px; height: 42px; }
   body[data-dock="sheet"] .as-tabs { padding: 4px 12px; }
 }
+
+/* ------------------------------------------- what a reply can carry --- */
+/* a course video: the course's own player, inside the reply */
+.as-vcard { margin-top: 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.as-vhead { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px 4px; }
+.as-vhead small { color: var(--muted); }
+.as-vframe:empty { display: none; }
+.as-vplayer { display: block; width: 100%; height: 240px; border: 0; background: var(--bg); }
+.as-vrow { gap: 6px; padding: 6px 10px 8px; flex-wrap: wrap; }
+.as-vnote { display: block; padding: 0 10px 8px; color: var(--muted); font-size: var(--fs-xs); }
+.as-msg.lantern:has(.as-vcard) { max-width: 100%; width: 100%; box-sizing: border-box; }
+/* outside videos: links, opened in the browser */
+.as-outside { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.as-outside a { font-weight: 600; }
+.as-outside small { color: var(--muted); }
+.as-oplay { font-size: .8em; color: var(--accent); }
+/* the handbook: Open buttons, and "Handbook p. N" in the words */
+.as-hbrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.as-hb { font-size: var(--fs-xs); padding: 3px 10px; }
+.as-hblink { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+
+/* ----------------------------- teaching with the course's own visuals --- */
+/* a figure, equation, passage, example or sketch inside the reply: one quiet frame each */
+.as-msg.teach { max-width: 100%; width: 100%; box-sizing: border-box; }
+.as-vis { display: grid; gap: 8px; margin-bottom: 6px; }
+.as-vis:empty { display: none; }
+.as-tcard { margin: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.as-thead { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px 2px; }
+.as-thead small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.as-tframe { display: block; width: 100%; border: 0; background: var(--bg); transition: height .15s ease; }
+.as-topen { margin: 0 8px 8px; }
+.as-streaming { white-space: pre-wrap; }
+.as-cue { display: inline-block; width: 0; height: 0; }
+.as-cue.on::after { content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 3px; border-radius: 50%; background: var(--accent, currentColor); vertical-align: middle; }
+::highlight(as-cue-text) { background: color-mix(in srgb, var(--accent, #c80) 28%, transparent); color: inherit; }
+.as-cuebar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.as-cuebar .btn { padding: 3px 10px; font-size: var(--fs-xs); min-width: 34px; }
+.as-cuebar .btn:disabled { opacity: .4; }
+.as-stepn { color: var(--muted); font-size: var(--fs-xs); min-width: 74px; text-align: center; }
