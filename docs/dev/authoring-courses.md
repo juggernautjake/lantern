@@ -92,6 +92,63 @@ Keep one JSON object under your `progress.key`:
 - **What it feeds:** the course overview (every item with its status, the %, time left, what's next) and the learning context (objectives and key terms, for the assistant and the resource finder).
 - **Ids are forever.** Progress is stored against them. A new version may add ids and reword titles, but must never rename or remove one: the build warns, the publish refuses, and installing on a learner's computer refuses. To retire a lesson, keep its id and mark the page "no longer needed".
 
+## Teaching with your course (the `teach` block)
+
+Lantern's assistant knows nothing about any subject. What it can teach with, and what it stays on, comes from the **installed pack**: an optional `teach` block in `course.json`, carried into the manifest by `build-pack`. A course without it still gets the general assistant (the lessons, progress, notes, hints, videos and web search). A course with it gets exactly the tools its block supplies, never another course's.
+
+```jsonc
+"teach": {
+  // the build's map: pack path -> source in the repo (a file or a folder). Not copied into the manifest.
+  "files": { "teach/data/glossary.json": "courses/<id>/data/glossary.json", "teach/kit/engine.js": "app/course/engine.js" },
+
+  // data the tools read (pack paths)
+  "data": { "modules": "teach/data/modules.json", "equations": "...", "templates": "...", "glossary": "...", "acronyms": "...", "refsheet": "..." },
+
+  // scripts the server runs to draw figures / generate problems, in load order (pack paths)
+  "figures":    { "load": ["teach/kit/markdown.js", "teach/figures/m1.js"] },
+  "generators": { "load": ["teach/kit/engine.js", "teach/content.js"] },
+
+  // the subject: inline, or a pack path to a JSON file
+  "scope": { "name": "…", "topic": "…", "tutor": "a … tutor", "about": "what is on topic", "vocabulary": ["words"], "patterns": ["regex"] },
+
+  "tools":   "teach/tools.json",                 // tool descriptions in the course's words { tool: "text" }
+  "prompts": { "tutor": "teach/tutor.md", "visuals": "teach/visuals.md" },   // notes added to the system prompt
+  "reference": { "name": "…", "note": "…", "standardNote": "…" },           // turns on handbook + standard
+  "glossary":  { "computational": "…", "conceptual": "…", "how": "…" },      // how to explain a term
+  "lawBasis":  { "jurisdictionPattern": "regex", "how": "…" },               // turns on law_basis
+  "review":    { "kindNames": { "exam": "mock exam" }, "note": "extra line for quiz reviews" },
+  "videos":    { "dir": "assets/videos" },        // where the video scripts are (default as shown)
+  "library":   { "index": "assets/library/index.json" }
+}
+```
+
+What each part switches on:
+
+| In `teach` | The assistant gets |
+|---|---|
+| `data.modules` + `figures.load` | `find_visuals`, `show_figure`, `show_demo`, `show_equation`, `show_passage`, `draw_figure`, `draw_derivation` |
+| `data.templates` + `generators.load` | `worked_example` (numbers from your own engine, never the model's arithmetic) |
+| `data.glossary` (+ `acronyms`, `refsheet`) | `glossary` (aliases, rough spelling, acronyms, the lessons that teach the term) |
+| `reference` | `handbook` and `standard`, from the pack's `context/knowledge.json` inventory |
+| `lawBasis` | `law_basis` (lessons to rest a scenario on, marking the jurisdiction-specific ones) |
+| `scope` | the scope gate: a question is on, off or an injection before any tool or model runs |
+| `prompts`, `tools`, `review` | your own wording |
+
+**Scope.** With `scope`, the gate uses your `vocabulary` (plus your glossary's terms and `patterns`) and, when still unclear, one quick Haiku check whose prompt uses your `tutor` and `about` lines. With `teach` but no `scope`, the course is scoped to its title and description. With no `teach`, there is no gate. With no course open, the assistant helps with studying in general.
+
+**Data shapes** (the same files the course page reads):
+
+- `modules`: `[{ n, title, lessons: [{ id, title, objective, reading }], key_formulas: [{ id, name, formula, variables, demo }] }]`. A reading may contain `[figure:name {json params} "caption"]` and `[demo:name]` lines.
+- `equations`: `{ formulas: { <id>: { symbols: [[sym, meaning]], means, when, how, derive, hook } } }`.
+- `glossary`: `{ entries: [{ term, definition, example?, usage?, "confused-with"?, related? }], aliases: { "alias": "Term" } }`; `acronyms` and `refsheet` are optional.
+- `templates`: the problem generators your engine runs (`Course.engine.generateValid(template)`).
+
+**How the server runs your code.** Only from the installed pack's own folder, never from the platform's folder and never from a path outside the pack. Each file is checked against the sha256 in the manifest (the same hashes the installer verified) before it is read or run; a changed file is refused. The scripts run in plain functions that are given a `Course` object, with no access to the server's modules. It is your code, as it is on the course page. Results are cached per pack id and version.
+
+**Building.** `build-pack` copies every file named in `teach.files` into the pack and fails if any path the block names is missing. A course that ships figure or engine code from the shared kit lists those kit files too (as FS does: `teach/kit/engine.js` and so on), because an installed copy of Lantern has no kit of its own. Lantern 0.2.1 or later reads the block (set `minPlatform`).
+
+**Try it.** `courses/_template/course.json` carries a commented-out example (`_teach`); rename it to `teach` and build. `courses/fs/course.json` is a full one. `server/test/test-multicourse.mjs` shows what a second course gets.
+
 ## Publishing and updating
 
 ```
@@ -112,6 +169,23 @@ node scripts/publish-course.mjs knots --listed     …show its title in "More co
 4. Publish again.
 
 Everyone who has the course gets the new version on their next sync, sees "*Knots for Everyone was updated to 1.1.0. Your progress is kept.*", and can read what's new.
+
+## External media (build.media)
+
+Big files (narration, video) can stay out of the pack and be served from Cloudflare R2. Declare them in `course.json`:
+
+```json
+"build": {
+  "assets": [{ "from": "app/fs/assets", "to": "assets", "exclude": "\\.(webm|mp4)$" }],
+  "media": { "from": "app/fs/assets/videos", "to": "assets/videos", "include": ["*.mp4"], "keyPrefix": "fs" }
+}
+```
+
+- `from`: the folder of files; `to`: where they appear inside the pack (so pages keep using `assets/videos/x.mp4`); `include`: file patterns (`*` matches within a folder); `keyPrefix`: the key's folder in the bucket. An optional `base` is the public address used when `R2_PUBLIC_URL` is not set.
+- Keep the same files out of `build.assets` (the example excludes them there) so they are not read into the pack.
+- The build writes `manifest.media = { base, files: { "assets/videos/x.mp4": { key, size, sha256 } } }`. A key is `<keyPrefix>/<sha256><ext>`: it names the content, so it never changes meaning.
+- Then `node scripts/upload-media.mjs <course>` and publish. The environment names (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL`) and the setup are in `docs/dev/releasing.md`.
+- Pages need no change. The app downloads the files into the installed pack, redirects to R2 until a file is there, and serves it locally afterwards. A pack with no `build.media` works exactly as before. Set `minPlatform` to 0.2.1 or newer.
 
 ## Packs, exactly
 

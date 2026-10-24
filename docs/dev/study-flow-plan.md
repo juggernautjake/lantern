@@ -1,6 +1,13 @@
 # FS course: study sessions, weak spots and practice — one study flow
 
-Written 2026-10-22. Design only: no code has changed. It answers the owner's question: "We have stuff for studying our weak areas, and we have the weak spots part that tests us over what we need to get better on. Perhaps there is a way to merge these a bit?"
+**Status (2026-10-23): built, for the next versions (not released).** One Study page with Up next, one ranking (`insights.rank()`), one builder (`sessions.topicSet`), one runner (sessions.js), Weak spots as the record, the weak-spot paper as a Mock exam length, Progress's one module table. Where the build differs from the design below:
+- **Capabilities kept as options** (`consolidation-plan.md` a1), not dropped: Study's folded *Options* line holds Material, Difficulty and Source (mixed / generated / bank / my weak questions, chosen inside the module before ranking); *Solve-only equation drill* is in the picker's *Drills* group (generator topics only, no refreshers); *Why these topics* is folded under Up next; *Topics I choose* is the tick column in Weak spots' *Every topic you have answered*; the timed weak-spot paper is a length on Mock exam *and* a quiet button on Weak spots.
+- **Practice** is a route that opens Study with the picker on that module (`go('practice')`); it is hidden from the rail. Its hint is `sessions.hint()`.
+- **`study.nextUp()` is unchanged.** Lantern's own continue point reads it (test-progress); Up next calls it for its "next lesson" rule, and the start page shows Up next.
+- **Phone:** instead of a sticky *Next* row, the way on sits directly under the verdict (ui-audit B1), and an equation drill's *Next* is sticky above the tool dock.
+- The picker's *Start* is disabled until something is chosen. Length is 10 / 20 / 30 / 40.
+
+Written 2026-10-22. It answers the owner's question: "We have stuff for studying our weak areas, and we have the weak spots part that tests us over what we need to get better on. Perhaps there is a way to merge these a bit?"
 
 It also follows the owner's rule: "What I don't want is increased complication of features and navigation and elements … I want all of the panels and hubs and navigation and UI elements and everything to make complete sense and look good." So every change here **removes** a page, a mode, a button or a choice, or replaces two with one.
 

@@ -31,6 +31,7 @@ import * as config from './platform/config.js';
 import * as platformRoutes from './platform/routes.js';
 import * as assistantRoutes from './assistant/routes.js';
 import * as packs from './platform/packs.js';
+import * as media from './platform/media.js';
 import * as local from './platform/local.js';
 import * as settings from './platform/settings.js';
 import * as engine from './platform/sync/engine.js';
@@ -98,6 +99,7 @@ export function boot(opts) {
     // installed when they are new or newer. The public program has none.
     const bundled = packs.installBundled(process.env.LANTERN_BUNDLED_PACKS || join(ROOT, 'dist', 'packs'));
     bundled.filter((b) => b.error).forEach((b) => console.warn('[lantern] could not install ' + b.file + ': ' + b.error));
+    media.resumeAll();   // carry on downloading any course narration that is not all here yet
     recordVersion();
   }
 

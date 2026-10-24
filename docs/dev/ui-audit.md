@@ -2,7 +2,40 @@
 
 The owner's brief: every panel, hub, navigation item and control should make sense and look good. Every button should work. Things should render where they belong. After any click, answer or finished set, the view should land where the learner needs it, so they never have to scroll for the next thing. The owner wants **no new features or elements, only consolidation and smoothing**. Each item below fixes an existing behaviour or merges existing elements.
 
-**Nothing has been fixed yet.** Other agents are changing `app/course/study.js`, `shell.js`, `notes.js`, `insights.js` and the study-flow, mock-exam and reorder designs in parallel. Line numbers are from the working tree on 2026-10-22, so search by the function named next to each one.
+**Status (2026-10-23): worked through, for the next versions (not released).** Each item below ends with its outcome. Summary: B1–B10, C1–C13 and K1–K8 fixed (B3–B5, C9 and C12 were already fixed by the CBT mock exam); S1, S2, S3 (names), S7, S8, S9 done; **not done on purpose: S4 (Calculator page), S5 (collapsing the rail), S6 (header), S10 (three buttons), S11 (one search)**, which change what exists rather than smooth it and want the owner's call. `qa-ui` after the work: 0 broken and 0 confusing in the flows and in the standing pages (the audit found 10 broken, 13 confusing, 8 cosmetic); what it still reports is the hidden file input in the Handbook panel (a listed crawler artefact), a dark-mode contrast on library search hits, and the "no direct way in" note for module checks on a phone (they are in the rail, 2.1 screens down, and Up next offers them).
+
+Line numbers were from the working tree on 2026-10-22, so search by the function named next to each one.
+
+| Item | Outcome |
+|---|---|
+| B1 | Fixed: the way on sits directly under the verdict, above the working; the verdict is scrolled to the top (`Course.bring`). |
+| B2 | Fixed: the score is brought to the top of the view and focused, in every runner. |
+| B3, B4, B5 | Already fixed by the CBT mock exam (its own scroll and focus; qa-exam checks them). |
+| B6 | Fixed: the headings open that module's Summary sheet. |
+| B7 | Fixed: an empty Check says "Enter an answer first" and counts nothing. An ordering question has no empty state (the arrangement shown is the answer). |
+| B8 | Fixed: Escape closes Notes (what was typed is kept first). |
+| B9 | Fixed: `scroll-padding` for the header and the phone dock, focus without scrolling, and the session head brought to the top. |
+| B10 | Fixed: "Watch it taught" plays the chapter in place (`video.watch`), in a check, a practice set and a session; the refresher too. |
+| C1, C2 | Fixed: focus goes to the way on after a check, to the score after a set, to the card after Next, and in Flashcards to Show the answer / Knew it. |
+| C3, C4 | Fixed: the calculator, Notes, Handbook and glossary popup take focus and give it back. |
+| C5 | Fixed: the rail scrolls its current item into its own view. |
+| C6 | Fixed: Study, Weak spots, Flashcards, Mock exam and the look-up pages are at the top of the rail; the bold *Practice* and *mock exam* on the start page are links. |
+| C7 | Fixed: the feedback and Next are brought into view (and Check, after choosing equations). |
+| C8 | Fixed: `reveal` and `scroll-padding-bottom` allow for the phone dock. |
+| C9, C12 | Already fixed by the CBT mock exam. |
+| C10 | Fixed: "Module N check" in the rail, the title and the h1. |
+| C11 | Fixed: the Solve-only drill uses topics with generators and has no refreshers. |
+| C13 | Fixed: the Lantern sentence shows only inside Lantern. |
+| K1 | Fixed: icon-only buttons below 1,400 px. |
+| K2 | Fixed: no "Anytime" crumb. |
+| K3, S9 | Fixed: one wording, "Mark this done". |
+| K4 | Fixed. K5: fixed (no underline, ↗). K6: fixed (Check is brought into view when the keyboard is up). |
+| K7 | Fixed: touch wording on a touch screen; the tab strip already fades. K8: fixed. |
+| S1, S7 | Done: one Study page (study-flow-plan.md). |
+| S2 | Done: one Equation drill row (Start, and Choose…); Solve-only kept in the picker. |
+| S3 | Names done: "Formula sheet" for the ∑ button, "Codes & standards" for the library, the palette count computed. |
+| S8 | Done. |
+| S4, S5, S6, S10, S11 | Not done: see the summary. |
 
 ## How it was checked
 

@@ -95,7 +95,7 @@ export function createWakeListener(o) {
   const WATCH_MS = opts.watchMs || 3000;
 
   let wanted = false, paused = false, rec = null, listening = false, starting = false;
-  let lastAlive = 0, failures = 0, retry = null, watch = null;
+  let lastAlive = 0, failures = 0, retry = null, watch = null, startedAt = 0;
   let armedAt = 0;               // the name was heard; the request may come in the next phrase
   let armedUtterance = -1;       // which phrase chimed already (so one phrase chimes once)
   let utterance = 0;
@@ -108,7 +108,7 @@ export function createWakeListener(o) {
     r.interimResults = true;
     r.lang = opts.lang || 'en-US';
     r.maxAlternatives = 3;
-    r.onstart = () => { starting = false; listening = true; failures = 0; lastAlive = now(); state('listening'); };
+    r.onstart = () => { starting = false; listening = true; startedAt = now(); lastAlive = now(); state('listening'); };
     r.onaudiostart = () => { lastAlive = now(); };
     r.onspeechstart = () => { lastAlive = now(); };
     r.onresult = (e) => { lastAlive = now(); results(e); };
@@ -120,6 +120,11 @@ export function createWakeListener(o) {
     r.onend = () => {
       if (rec !== r) return;                               // replaced or stopped
       rec = null;                                          // every session gets a fresh listener: a stalled one is not reused
+      // a session that ended almost at once (the microphone busy, the service dropping)
+      // counts as a failure, so the restarts back off instead of churning every second;
+      // a session that ran a while resets the count
+      if (startedAt && now() - startedAt < 2000) failures++; else failures = 0;
+      startedAt = 0;
       listening = false; starting = false;
       state('stopped');
       schedule();

@@ -4,8 +4,8 @@
    Free learning material that matches the lesson open right now:
 
      OFFLINE, always   deep links to the reference docs for the tags and
-                       functions the lesson uses (cfdocs.org/<tag> for the
-                       ColdFusion course), and the course's own reading list
+                       functions the lesson uses (a course gives a tagDocs URL
+                       pattern), and the course's own reading list
      ONLINE            searches, one per kind of source, built ONLY from the
                        lesson's title, objectives and key terms and the course's
                        resources.json — never from anything the learner typed
@@ -30,9 +30,8 @@ import { createYtSearch } from '../../../vendor/ecosystem-core/lib/ytsearch.mjs'
 
 export const ALLOW = [
   'youtube.com', 'youtu.be', 'thecrashcourse.com', 'khanacademy.org', 'codecademy.com', 'freecodecamp.org',
-  'developer.mozilla.org', 'wikipedia.org', 'reddit.com', 'cfdocs.org', 'helpx.adobe.com', 'adobe.com',
-  'learncfinaweek.com', 'bennadel.com', 'ortussolutions.com', 'ortusbooks.com', 'coldbox.org', 'lucee.org',
-  'docs.lucee.org', 'w3schools.com', 'stackoverflow.com', 'dev.to', 'css-tricks.com', 'web.dev',
+  'developer.mozilla.org', 'wikipedia.org', 'reddit.com',
+  'w3schools.com', 'stackoverflow.com', 'dev.to', 'css-tricks.com', 'web.dev',
   'coursera.org', 'edx.org', 'ocw.mit.edu', 'openstax.org', 'britannica.com', 'nationalgeographic.com',
   'smithsonianmag.com', 'nasa.gov', 'ted.com', 'python.org', 'docs.python.org', 'learn.microsoft.com',
 ];
@@ -62,8 +61,9 @@ const BY_SUBJECT = {
   programming: ['youtube', 'docs', 'freecodecamp', 'codecademy', 'mdn', 'reddit', 'wikipedia'],
   default: ['youtube', 'khan', 'crashcourse', 'wikipedia', 'reddit'],
 };
-const DOC_SITES = { coldfusion: ['cfdocs.org', 'helpx.adobe.com'], default: [] };
-const BLOG_SITES = { coldfusion: ['bennadel.com', 'ortussolutions.com', 'learncfinaweek.com'], default: [] };
+/* a course names its own documentation and blog sites in its resources.json (docSites, blogSites, allow) */
+const DOC_SITES = { default: [] };
+const BLOG_SITES = { default: [] };
 
 /* ------------------------------------------------------------- queries --- */
 
@@ -102,7 +102,7 @@ export function queriesFor(ctx, res, opts) {
   const key = /program|code|coding|software|web/.test(subject) ? 'programming' : 'default';
   const list = o.providers || r.providers || BY_SUBJECT[key];
   const topic = o.topic ? words(o.topic, 12) : topicFor(ctx, r);
-  const flavour = /coldfusion|cfml/i.test(r.language || (ctx.course && ctx.course.title) || '') ? 'coldfusion' : 'default';
+  const flavour = 'default';
   // Khan Academy teaches the underlying maths and science, not a course's
   // section names: search it for the lesson's key terms when there are some.
   const terms = ((ctx.item && ctx.item.keyTerms) || []).map(tidy).filter((t) => t && t.length <= 30).slice(0, 1);
@@ -127,11 +127,16 @@ export function offlineLinks(ctx, res) {
   const seen = new Set();
   const add = (x) => { if (!seen.has(x.url)) { seen.add(x.url); out.push(x); } };
   if (r.tagDocs) {
+    // a course says which key terms are tags (tagPattern, e.g. a markup language's) as well as functions
+    let tagRx = null;
+    try { tagRx = r.tagPattern ? new RegExp(r.tagPattern, 'i') : null; } catch (e) { tagRx = null; }
     for (const t of (ctx.item && ctx.item.keyTerms) || []) {
-      const m = /^<?\/?(cf[a-z]+)\b/i.exec(String(t).trim()) || /^([A-Za-z][A-Za-z0-9]{2,40})\(\)?$/.exec(String(t).trim());
+      const key = String(t).trim();
+      const tagM = tagRx ? tagRx.exec(key) : null;
+      const m = tagM || /^([A-Za-z][A-Za-z0-9]{2,40})\(\)?$/.exec(key);
       if (!m) continue;
       const name = m[1].toLowerCase();
-      add({ title: (m[0].startsWith('<') || /^cf/i.test(name) ? '<' + name + '>' : m[1] + '()') + ' reference', url: r.tagDocs.replace('{name}', encodeURIComponent(name)), source: new URL(r.tagDocs.replace('{name}', 'x')).hostname, type: 'docs', offline: true });
+      add({ title: (tagM ? '<' + name + '>' : m[1] + '()') + ' reference', url: r.tagDocs.replace('{name}', encodeURIComponent(name)), source: new URL(r.tagDocs.replace('{name}', 'x')).hostname, type: 'docs', offline: true });
     }
   }
   for (const d of r.docs || []) add({ title: d.title, url: d.url, source: d.source || '', type: 'docs', offline: true });

@@ -1,19 +1,19 @@
 /* ===========================================================================
    server/src/assistant/teach/glossary.js — every term, explained from the course.
    ---------------------------------------------------------------------------
-   lookup(query)   a glossary term, an alias, an acronym or a fuzzy spelling →
+   lookup(pack, query)   a glossary term, an alias, an acronym or a fuzzy spelling →
                    { term, definition, …every other field the entry carries
                    (example, usage, confused-with, related…), the acronym's
                    entry, the lessons that teach it with a sentence from each,
                    and the show_figure / show_equation handles that explain it }
 
-   Read from app/ (shipped with Lantern) once, on first use. Fields are read
+   Read from the installed pack named in its manifest's teach.data (glossary,
+   acronyms, refsheet), once per pack version, on first use. Fields are read
    generically: whatever the data gains (example sentences, usage,
-   confused-with, related terms, app/fs/data/acronyms.json) is passed on.
+   confused-with, related terms) is passed on. teach.glossary may give the
+   course's own guidance for how to explain a term.
    =========================================================================== */
 
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import * as course from './course.js';
 import * as visuals from './visuals.js';
 import { words } from '../knowledge.js';
@@ -22,9 +22,11 @@ const norm = (s) => String(s || '').toLowerCase().replace(/[‘’′]/g, "'").r
 const squash = (s) => norm(s).replace(/[^a-z0-9]/g, '');
 const clip = (v, n) => (typeof v === 'string' ? (v.length > n ? v.slice(0, n - 1) + '…' : v) : v);
 
-let G = null;
-function dataDir() { return join(course.fsRoot(), 'data'); }
-function rd(name) { const f = join(dataDir(), name); if (!existsSync(f)) return null; try { return JSON.parse(readFileSync(f, 'utf8')); } catch (e) { return null; } }
+/* the pack being explained from: set by each entry point (all synchronous) */
+let P = null;
+const GS = new Map();
+const rd = (name) => { const T = course.teachOf(P); return T ? T.data(name.replace('.json', '')) : null; };
+const guide = () => { const T = course.teachOf(P); return (T && T.cfg.glossary) || {}; };
 
 function acronymList(raw) {
   if (!raw) return [];
@@ -38,8 +40,10 @@ function acronymList(raw) {
   }).filter(Boolean);
 }
 
-export function load() {
-  if (G) return G;
+export function load(pack) {
+  if (pack) P = pack;
+  const key = P.id + '@' + P.version;
+  if (GS.has(key)) return GS.get(key);
   const raw = rd('glossary.json') || { entries: [], aliases: {} };
   const entries = raw.entries || [];
   const byKey = new Map();            // norm(term) -> entry
@@ -62,9 +66,10 @@ export function load() {
       parts: f ? (f.parts || []).map((p) => ({ part: p.part, label: norm(p.label), means: p.means })) : [], lesson: h.lesson || null, page: h.page, kind: h.kind });
   }
   // the term-sized pieces of every symbol list in the equations (e.g. "tangent distance")
-  const D = course.data();
+  const D = course.data(P);
   const forms = Object.values(D.formulas).map((f) => ({ id: f.id, name: norm(f.name), module: f.module }));
-  G = { entries, byKey, alias, acr, acrBy, links, forms, lessonText: null, keys: [...byKey.keys()] };
+  const G = { entries, byKey, alias, acr, acrBy, links, forms, lessonText: null, keys: [...byKey.keys()] };
+  GS.set(key, G);
   return G;
 }
 
@@ -92,7 +97,8 @@ function candidates(q) {
 }
 
 /* find the entry: [entry, how] or null; plus other near candidates */
-export function resolve(query) {
+export function resolve(pack, query) {
+  P = pack;
   const g = load();
   const cands = candidates(query);
   for (const c of cands) for (const v of variants(c)) {
@@ -146,7 +152,7 @@ function near(query, not) {
 function lessonIndex() {
   const g = load();
   if (g.lessonText) return g.lessonText;
-  g.lessonText = Object.values(course.data().lessons).map((l) => ({ l, text: l.reading.replace(/\[(figure|demo|video):[^\]]*\]/g, ' '), low: l.reading.toLowerCase(), paras: null }));
+  g.lessonText = Object.values(course.data(P).lessons).map((l) => ({ l, text: l.reading.replace(/\[(figure|demo|video):[^\]]*\]/g, ' '), low: l.reading.toLowerCase(), paras: null }));
   for (const x of g.lessonText) x.paras = fold(x.text).split(/\n\s*\n/).map((t) => ({ t, ws: new Set(words(t)) }));
   return g.lessonText;
 }
@@ -207,8 +213,9 @@ function handlesFor(terms, e) {
   const ts = terms.map(norm).filter((t) => t.length > 2);
   const eqs = [], figs = [];
   const seenE = new Set(), seenF = new Set();
-  const D = course.data();
-  const { V } = course.figures();
+  const D = course.data(P);
+  const F = course.figures(P);
+  const V = F ? F.V : { figures: {} };
   const addEq = (id, why) => { if (id && D.formulas[id] && !seenE.has(id)) { seenE.add(id); eqs.push({ show_equation: id, name: D.formulas[id].name, form: D.formulas[id].form, because: why }); } };
   const addFig = (id, params, part, why) => { if (id && V.figures[id] && !seenF.has(id + (part || ''))) { seenF.add(id + (part || '')); figs.push({ show_figure: id, params: params && Object.keys(params).length ? params : undefined, cue_part: part || undefined, because: why }); } };
   for (const L of g.links) {
@@ -225,7 +232,7 @@ function handlesFor(terms, e) {
   // otherwise the nearest built figure or equation, as a suggestion only
   let suggest = null;
   if (!eqs.length && !figs.length) {
-    const f = visuals.find(ts[0] || '');
+    const f = visuals.find(P, ts[0] || '');
     const topF = f.figures.filter((x) => x.shown_in)[0], topE = f.equations[0];
     if (topF || topE) suggest = { note: 'weak matches: only use one if it really fits (find_visuals can look further)', figure: topF ? { show_figure: topF.id, caption: topF.caption } : undefined, equation: topE ? { show_equation: topE.id, name: topE.name } : undefined };
   }
@@ -234,12 +241,13 @@ function handlesFor(terms, e) {
 
 /* ------------------------------------------------------------------ lookup --- */
 const SKIP = new Set(['term', 'definition']);
-export function lookup(query) {
+export function lookup(pack, query) {
+  P = pack;
   const g = load();
-  const r = resolve(query);
+  const r = resolve(P, query);
   if (!r || (!r.e && !r.a)) {
     const n = near(query);
-    return { found: false, did_you_mean: n, message: n.length ? 'No glossary entry by that name; the nearest are listed. Use search_course for the course\'s readings.' : 'Not in the glossary. Use search_course, or handbook for an item of the NCEES FS Reference Handbook.' };
+    return { found: false, did_you_mean: n, message: n.length ? 'No glossary entry by that name; the nearest are listed. Use search_course for the course\'s readings.' : 'Not in the glossary. Use search_course, or, when the course has a reference, handbook for one of its items.' };
   }
   const e = r.e;
   let a = r.a || null;
@@ -257,12 +265,13 @@ export function lookup(query) {
   out.also_called = names.slice(1, 6).length ? names.slice(1, 6) : undefined;
   out.taught_in = lessonsFor(names.slice(0, 4), 3);
   Object.assign(out, handlesFor(names, e));
-  out.kind_of_answer = out.equations && out.equations.length ? 'computational: also worked_example for numbers' : 'legal or conceptual: give a sentence from a deed or report';
-  out.how = 'Plain definition, then one concrete example (a deed or report sentence for a legal term; worked_example numbers for a computational one), show the figure or equation card with cues, when it is used and what it is confused with, then the lesson. Offer another example.';
+  const gd = guide();
+  out.kind_of_answer = out.equations && out.equations.length ? (gd.computational || 'computational: also worked_example for numbers') : (gd.conceptual || 'conceptual: give a plain example from the lessons');
+  out.how = gd.how || 'Plain definition, then one concrete example, show the figure or equation card with cues when it helps, when it is used and what it is confused with, then the lesson. Offer another example.';
   return out;
 }
 
 /* for tests: every entry that the tool should resolve */
-export const all = () => load().entries;
-export const acronyms = () => load().acr;
-export const stats = () => { const g = load(); return { terms: g.entries.length, aliases: g.alias.size, acronyms: g.acr.length }; };
+export const all = (pack) => load(pack).entries;
+export const acronyms = (pack) => load(pack).acr;
+export const stats = (pack) => { const g = load(pack); return { terms: g.entries.length, aliases: g.alias.size, acronyms: g.acr.length }; };

@@ -24,6 +24,8 @@ import { join } from 'node:path';
 import { dataDir } from '../platform/config.js';
 import * as brain from './brain.js';
 import * as resources from './resources.js';
+import * as packs from '../platform/packs.js';
+import * as teachPack from './teach/pack.js';
 
 const KEEP = 40;                       // runs remembered per course
 const VIDEO_TOPICS = 3;                // weak topics that get videos
@@ -96,7 +98,7 @@ export function plain(r) {
   const weak = r.weak.map((id) => T[id]).filter(Boolean);
   const strong = r.strong.map((id) => T[id]).filter(Boolean);
   const out = [];
-  out.push(`That ${KIND_NAME[r.kind]} is done: ${r.correct} of ${r.total} right, ${r.percent}%.` + (r.passMark != null && r.kind !== 'practice' ? (r.passed ? ' A pass.' : ` The pass mark is ${r.passMark}%, so not yet.`) : ''));
+  out.push(`That ${(r.kindNames || KIND_NAME)[r.kind]} is done: ${r.correct} of ${r.total} right, ${r.percent}%.` + (r.passMark != null && r.kind !== 'practice' ? (r.passed ? ' A pass.' : ` The pass mark is ${r.passMark}%, so not yet.`) : ''));
   if (strong.length) out.push(`You were solid on ${list(strong.slice(0, 3).map((t) => t.title))}.`);
   if (weak.length) {
     out.push(`The topics to work on: ${list(weak.slice(0, 3).map((t) => `${t.title} (${t.right} of ${t.total})`))}.`);
@@ -165,7 +167,7 @@ function promptFor(r) {
   const line = (t) => `- ${t.title}${t.idk ? ` [said "I don't know" ${t.idk}×${t.idkRight ? `, ${t.idkRight} of those guessed right` : ''}]` : ''} (Module ${t.shown != null ? t.shown : t.module}${t.refTitle ? ', reading: ' + t.refTitle : ''}${t.heading && t.heading !== t.title ? ', heading: ' + t.heading : ''}${t.video ? ', video: "' + t.video.title + '"' + (t.video.chapter ? ', chapter "' + t.video.chapter + '"' : '') : ''}): ${t.right} of ${t.total} this time` + (t.overall && t.overall.seen > t.total ? `; ${t.overall.pct}% over ${t.overall.seen} answers all time` : '');
   const parts = [];
   parts.push(`Course subject: ${r.subject || 'unknown'}`);
-  parts.push(`What they finished: a ${KIND_NAME[r.kind]}${r.title ? ' — ' + r.title : ''}. Score ${r.correct} of ${r.total} (${r.percent}%)` + (r.passMark != null && r.kind !== 'practice' ? `, pass mark ${r.passMark}%, ${r.passed ? 'passed' : 'not passed'}` : '') + '.'
+  parts.push(`What they finished: a ${(r.kindNames || KIND_NAME)[r.kind]}${r.title ? ' — ' + r.title : ''}. Score ${r.correct} of ${r.total} (${r.percent}%)` + (r.passMark != null && r.kind !== 'practice' ? `, pass mark ${r.passMark}%, ${r.passed ? 'passed' : 'not passed'}` : '') + '.'
     + (r.time && r.time.limitMin ? ` Time: ${r.time.usedMin} of ${r.time.limitMin} minutes${r.time.timedOut ? ' (time ran out)' : ''}.` : '')
     + (r.blankCount ? ` Left blank: ${r.blankCount}.` : '') + (r.idkCount ? ` Tagged "I don't know": ${r.idkCount} (${r.idkRight} of them guessed right).` : ''));
   if (r.focus.length) parts.push('Focus topics, most important first:\n' + r.focus.map((id) => T[id]).filter(Boolean).map(line).join('\n'));
@@ -192,7 +194,7 @@ export function spokenPart(text) {
 /* ---------------------------------------------------------------- videos --- */
 
 /* Up to three videos for each of the weakest topics, found with the course's
-   own subject words so "Taping and its corrections" means surveying tape. */
+   own subject words so a topic title means the right thing in the course's own subject. */
 async function videosFor(r, ctx, res) {
   const T = byId(r);
   const subject = String((res && res.subject) || r.subject || '').trim();
@@ -257,6 +259,10 @@ export async function review(raw, opts) {
   if (typeof o.shown === 'function') r.topics.forEach((t) => { t.shown = o.shown(t.module); });
   const course = r.course || null;
   if (course) remember(o.uid, course, r);
+  // the course's own wording (teach.review: kindNames, note), when its pack declares it
+  const rv = (() => { try { const T = course && teachPack.of(packs.get(course)); return (T && T.cfg.review) || null; } catch (e) { return null; } })();
+  if (rv && rv.kindNames) r.kindNames = Object.assign({}, KIND_NAME, rv.kindNames);
+  const withNote = (sys) => (rv && rv.note ? sys + '\n\n' + String(rv.note) : sys);
 
   const videosP = (r.weak.length || r.focus.length) ? withTimeout(videosFor(r, o.ctx || {}, o.res || null), 25000, []) : Promise.resolve([]);
   const L = brain.llm();
@@ -264,7 +270,7 @@ export async function review(raw, opts) {
   if (L.ready()) {
     try {
       const exam = r.kind === 'exam';
-      text = await L.complete({ system: exam ? SYSTEM_EXAM : SYSTEM, prompt: promptFor(r), maxTokens: exam ? 1400 : 700, timeoutMs: exam ? 70000 : 50000 });
+      text = await L.complete({ system: withNote(exam ? SYSTEM_EXAM : SYSTEM), prompt: promptFor(r), maxTokens: exam ? 1400 : 700, timeoutMs: exam ? 70000 : 50000 });
       via = L.provider();
     } catch (e) { error = e.status === 401 ? 'The AI key was not accepted.' : e.message; }
   }

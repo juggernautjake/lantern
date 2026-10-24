@@ -4,7 +4,7 @@
    A pack may carry context/knowledge.json (courses/<id>/structure.mjs
    knowledge(), written by build-pack under the same no-answers rule as the
    exercises): its readings, glossary, flashcards, formulas with why and when,
-   video chapters and where each video is shown, the NCEES handbook's
+   video chapters and where each video is shown, the course reference's
    notation-only inventory with printed pages, and its library of standards.
 
      search(pack, query, { kinds, limit })   the best passages, each with where
@@ -20,9 +20,8 @@
      findVideos(pack, words, { ref })        videos for a topic: titles, chapters,
                                              topics and (when shipped) every word said
 
-   The learner's own copy of the NCEES handbook (or of ALTA, the FEMA form…)
-   is never read here: NCEES forbids electronic distribution and storage in a
-   retrieval system. The inventory records each item in the handbook's own
+   The learner's own copy of a licensed reference (a handbook, a standard) is
+   never read here. The inventory records each item in the reference's own
    notation with its printed page, so the assistant can be exact and point to
    the page; the course opens the learner's copy at that page on their device.
 
@@ -31,6 +30,8 @@
    =========================================================================== */
 
 import * as videoIndex from './teach/videoindex.js';
+import { videoDir, libraryIndex, of as teachOf } from './teach/pack.js';
+const refNote = (pack, key, fallback) => { const T = teachOf(pack); const r = T && T.cfg.reference; return (r && r[key]) || fallback; };
 import { readFileSync } from 'node:fs';
 import * as packs from '../platform/packs.js';
 
@@ -93,7 +94,7 @@ function build(pack) {
     }
   } else {
     // an older pack: the video index alone
-    const idx = packJson(pack, 'assets/videos/index.json') || {};
+    const idx = packJson(pack, videoDir(pack) + '/index.json') || {};
     for (const [id, v] of Object.entries(idx)) {
       const vv = { id, title: v.title, kind: v.kind || 'lesson', module: v.module || null, seconds: Math.round(v.duration || 0), chapters: v.chapters || [], topics: v.topics || [], formula: v.formula || null, home: lessonHome(id) };
       out.videos.push(vv); out.byVideo.set(id, vv);
@@ -183,7 +184,7 @@ export function handbook(pack, q) {
   const formulas = (ix.kn.formulas || []);
   return {
     found: true,
-    note: 'Notation and our own descriptions of the NCEES FS Reference Handbook 2.5. Cite the page exactly as given; the learner opens their own copy there.',
+    note: refNote(pack, 'note', 'Notation and our own descriptions of the course reference. Cite the page exactly as given; the learner opens their own copy there.'),
     items: items.map((h) => {
       const f = formulas.filter((x) => (h.equations || []).includes(x.id)).slice(0, 2);
       const pageRow = ix.hbPages.find((p) => String(p.page).split('–').includes(String(h.page).replace(/[^\d].*$/, '')) || String(p.page) === String(h.page));
@@ -220,7 +221,7 @@ export function standard(pack, q) {
   let texts = null;
   const pagesOf = (d) => {
     if (d.own || !o.query) return undefined;
-    if (texts === null) texts = packJson(pack, 'assets/library/index.json') || {};
+    if (texts === null) texts = packJson(pack, libraryIndex(pack)) || {};
     const pages = texts[d.id] || [];
     const ws = words(o.query).filter((w) => w.length > 2);
     if (!ws.length) return undefined;
@@ -230,7 +231,7 @@ export function standard(pack, q) {
   };
   return {
     found: true,
-    note: 'Standards are described in our own words. Quote a public-domain document only from its pages below; for the learner’s own copies (ALTA/NSPS, the FEMA form, ASPRS, the NCEES handbook) point to the section and let them open their copy.',
+    note: refNote(pack, 'standardNote', 'Standards are described in our own words. Quote a public-domain document only from its pages below; for the learner’s own copies point to the section and let them open their copy.'),
     standards: hits.map((h) => ({ id: h.id, title: h.form, publisher: h.publisher, supplied: h.supplied, jurisdiction: h.jurisdiction, about: h.about, examAsks: h.examAsks, cite: cite(h), lessons: lessonsOf(ix, h.lessons) })),
     documents: docs.map((d) => ({ id: d.id, title: d.title, publisher: d.publisher, year: d.year, about: d.about, examSupplied: d.exam, copy: d.own ? 'the learner’s own copy (copyrighted)' : 'public domain, in the course library', modules: d.modules, pages: pagesOf(d) })),
   };
@@ -249,7 +250,7 @@ export function findVideosLexical(pack, query, opts) {
   const q = words(query);
   if (!q.length && !o.ref) return [];
   const key = pack.id + '@' + pack.version;
-  if (deep.key !== key) deep = { key, data: packJson(pack, 'assets/videos/search.json') || {} };
+  if (deep.key !== key) deep = { key, data: packJson(pack, videoDir(pack) + '/search.json') || {} };
   const scored = ix.videos.map((v) => {
     const title = words(v.title + ' ' + (v.formula || '')), topics = words((v.topics || []).join(' ')), chaps = words((v.chapters || []).map((c) => c.title + ' ' + (c.teaches || []).join(' ')).join(' '));
     const said = deep.data[v.id] && deep.data[v.id].w ? new Set(String(deep.data[v.id].w).split(' ')) : null;

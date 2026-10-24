@@ -188,7 +188,7 @@
   let es = null;
   function connectEvents() {
     es = new EventSource('/api/events');
-    const types = ['prefs', 'offer', 'offer-answered', 'courses', 'download', 'course-updated', 'progress', 'sync', 'update', 'open', 'suggest-open', 'reminder', 'milestone', 'signed-in', 'signed-out', 'eco-in', 'mic', 'assistant-prefs', 'friends', 'friend-request', 'friend-accepted'];
+    const types = ['prefs', 'offer', 'offer-answered', 'courses', 'download', 'media', 'course-updated', 'progress', 'sync', 'update', 'open', 'suggest-open', 'reminder', 'milestone', 'signed-in', 'signed-out', 'eco-in', 'mic', 'assistant-prefs', 'friends', 'friend-request', 'friend-accepted'];
     types.forEach((t) => es.addEventListener(t, (m) => { let ev = {}; try { ev = JSON.parse(m.data); } catch (e) { /* bad */ } handleEvent(ev); fire(t, ev); }));
     es.onerror = () => { setSync(false, 'Reconnecting to Lantern…'); if (!watching) { watching = true; setTimeout(checkRestart, 1500); } };
     es.onopen = () => { if (S.platform) refreshPlatform(); };
@@ -227,6 +227,12 @@
       case 'courses': case 'offer-answered':
         loadCourses().then(rerenderIf('home'));
         break;
+      case 'media': {   // background narration download: the count on the course card, quietly
+        const mm = document.querySelector('[data-mediamsg="' + ev.course + '"]');
+        if (mm) mm.textContent = 'Saving narration for offline use: ' + ev.have + ' of ' + ev.total + (ev.phase === 'offline' ? ' (waiting for a connection)' : '');
+        if (ev.phase === 'done') loadCourses().then(rerenderIf('home'));
+        break;
+      }
       case 'download': paintDownload(ev); if (ev.phase === 'done' || ev.phase === 'failed') loadCourses().then(rerenderIf('home')); break;
       case 'course-updated':
         if (ev.from) toast(el('div', {}, [el('b', { text: ev.title + ' was updated to ' + ev.to + '. ' }), 'Your progress is kept. ', el('a', { href: '#/whats-new', text: 'What’s new' })]), { ms: 12000 });
@@ -471,6 +477,8 @@
     ]);
     if (c.installed) {
       card.appendChild(el('div', { class: 'progress', role: 'progressbar', 'aria-valuenow': pct, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-label': 'Progress' }, el('i', { style: 'width:' + pct + '%' })));
+      // narration kept outside the pack saves itself in the background; say so quietly until it is all here
+      if (c.media && c.media.have < c.media.total) card.appendChild(el('div', { class: 'muted', 'data-mediamsg': c.id, style: 'font-size:.85em', text: 'Saving narration for offline use: ' + c.media.have + ' of ' + c.media.total + (c.media.phase === 'offline' ? ' (waiting for a connection)' : '') }));
       card.appendChild(el('div', { class: 'row', style: 'justify-content:space-between' }, [
         el('span', { class: 'muted', title: c.count ? measure(c) : '', text: pct + '% done' + (c.current ? ' · last: ' + c.current.title : '') }),
         el('a', { class: 'btn primary', href: '#/course/' + encodeURIComponent(c.id), 'data-testid': 'open-' + c.id }, c.started ? 'Continue' : 'Start'),

@@ -24,11 +24,13 @@
 
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildPack, parsePack, serializePack, validateManifest } from '../server/src/platform/packs.js';
 import { allIds } from '../server/src/platform/progress.js';
 import { cmp } from '../server/src/platform/semver.js';
+import { createHash } from 'node:crypto';
+import { loadEnv } from './lib-r2.mjs';
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..');
 const COURSES = join(ROOT, 'courses');
@@ -46,6 +48,24 @@ function walk(dir) {
 function asDocument(html) {
   if (/^\s*<!doctype/i.test(html)) return html;
   return '<!doctype html>\n<html lang="en">\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n' + html + '\n</html>\n';
+}
+
+/* Every pack path a teach block names must be in the pack: data.* , figures.load,
+   generators.load, prompts.*, and scope / tools given as a file. */
+export function teachProblems(teach, files) {
+  const out = [];
+  const need = (what, p) => { if (typeof p !== 'string' || !p) out.push(what + ' must be a pack path.'); else if (!(p in files)) out.push(what + ' names ' + p + ', which is not in the pack (add it to teach.files).'); };
+  for (const [k, p] of Object.entries(teach.data || {})) need('data.' + k, p);
+  for (const sec of ['figures', 'generators']) if (teach[sec] !== undefined) {
+    if (!teach[sec] || !Array.isArray(teach[sec].load) || !teach[sec].load.length) out.push(sec + '.load must list the scripts to run, in order.');
+    else teach[sec].load.forEach((p, i) => need(sec + '.load[' + i + ']', p));
+  }
+  for (const [k, p] of Object.entries(teach.prompts || {})) need('prompts.' + k, p);
+  for (const sec of ['scope', 'tools']) if (typeof teach[sec] === 'string') need(sec, teach[sec]);
+  if (teach.figures && !(teach.data && teach.data.modules)) out.push('figures needs data.modules (the lessons whose readings use the figures).');
+  if (teach.generators && !(teach.data && teach.data.templates)) out.push('generators needs data.templates.');
+  if (teach.lawBasis && !(teach.data && teach.data.modules)) out.push('lawBasis needs data.modules.');
+  return out;
 }
 
 export async function build(name, opts) {
@@ -85,6 +105,53 @@ export async function build(name, opts) {
     for (const f of walk(join(dir, 'site'))) files[relative(join(dir, 'site'), f).replace(/\\/g, '/')] = readFileSync(f);
   } else {
     throw new Error('courses/' + name + ' has neither a site/ folder nor build.page.');
+  }
+
+  // 1b external media (build.media): large files kept out of the pack and served from
+  // R2 (or any public URL). Each is keyed by its sha256, so a key never changes meaning.
+  let media = null;
+  if (course.build && course.build.media) {
+    const spec = course.build.media;
+    loadEnv();
+    const src = join(o.root || ROOT, spec.from);
+    const to = (spec.to || ('assets/' + spec.from.split('/').pop())).replace(/\/+$/, '');
+    const globs = [].concat(spec.include || ['*']).map((g) => new RegExp('^' + String(g).replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*') + '$'));
+    const prefix = String(spec.keyPrefix || id).replace(/^\/+|\/+$/g, '');
+    const base = String(process.env.R2_PUBLIC_URL || spec.base || '').replace(/\/+$/, '');
+    if (!base) say('  WARNING: build.media has no base URL (set R2_PUBLIC_URL in .env or media.base in course.json); the pack cannot be published until it has one.');
+    media = { base, files: {} };
+    let bytes = 0;
+    for (const f of walk(src)) {
+      const rel = relative(src, f).replace(/\\/g, '/');
+      if (!globs.some((g) => g.test(rel))) continue;
+      const buf = readFileSync(f);
+      const sha = createHash('sha256').update(buf).digest('hex');
+      media.files[to + '/' + rel] = { key: prefix + '/' + sha + (/\.[A-Za-z0-9]+$/.exec(rel) || [''])[0].toLowerCase(), size: buf.length, sha256: sha };
+      bytes += buf.length;
+    }
+    for (const p of Object.keys(media.files)) delete files[p];   // never both inside and outside the pack
+    say('  media: ' + Object.keys(media.files).length + ' files, ' + (bytes / 1048576).toFixed(0) + ' MB kept out of the pack');
+  }
+
+  // 1c teaching (optional): course.teach. The pack's own files that the in-app assistant
+  // teaches from, named once here: teach.files maps a pack path to a source in the repo
+  // (a file, or a whole folder), and everything else in teach is pack paths. The block
+  // goes into the manifest as teach (without files); see docs/dev/authoring-courses.md.
+  let teach = null;
+  if (course.teach) {
+    const { files: tf, ...rest } = course.teach;
+    for (const [to, from] of Object.entries(tf || {})) {
+      const src = resolve(ROOT, from);
+      if (!src.startsWith(ROOT + sep)) throw new Error('teach.files: ' + from + ' is outside the repository.');
+      if (!existsSync(src)) throw new Error('teach.files: ' + from + ' does not exist.');
+      if (statSync(src).isDirectory()) {
+        for (const f of walk(src)) files[to.replace(/\/+$/, '') + '/' + relative(src, f).split(sep).join('/')] = readFileSync(f);
+      } else files[to] = readFileSync(src);
+    }
+    teach = rest;
+    const missing = teachProblems(teach, files);
+    if (missing.length) throw new Error('teach is not valid: ' + missing.join('; '));
+    say('  teach: ' + Object.keys(files).filter((p) => p.startsWith('teach/')).length + ' files');
   }
 
   // 2 the structure
@@ -133,6 +200,8 @@ export async function build(name, opts) {
     color: course.color || null, minPlatform: course.minPlatform || null, entry: 'index.html',
     storage: course.storage || { keys: [] }, progress: course.progress || null,
     ...(Array.isArray(course.retired) && course.retired.length ? { retired: course.retired } : {}),
+    ...(media ? { media } : {}),
+    ...(teach ? { teach } : {}),
     units, lessons, changelog: course.changelog || [], builtAt: new Date().toISOString(),
   };
   const errs = validateManifest(manifest);

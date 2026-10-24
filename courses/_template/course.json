@@ -8,7 +8,36 @@
   "estimatedHours": 1,
   "minPlatform": "0.1.0",
   "structure": "structure.json",
-  "storage": { "keys": ["course-template"] },
+  "storage": {
+    "keys": [
+      "course-template"
+    ]
+  },
+  "_comment_teach": "OPTIONAL. Rename _teach to teach to let the in-app assistant teach with this course (docs/dev/authoring-courses.md, \"Teaching with your course\"). A course without a teach block gets the general assistant, which already knows the lessons, progress and notes.",
+  "_teach": {
+    "files": {
+      "teach/glossary.json": "courses/_template/teach/glossary.json",
+      "teach/tutor.md": "courses/_template/teach/tutor.md"
+    },
+    "data": {
+      "glossary": "teach/glossary.json"
+    },
+    "scope": {
+      "subject": "Example",
+      "name": "the example course",
+      "topic": "the example course",
+      "tutor": "a tutor for the example course",
+      "about": "the example course and how to study it",
+      "vocabulary": [
+        "example",
+        "sample"
+      ]
+    },
+    "prompts": {
+      "tutor": "teach/tutor.md"
+    },
+    "_figures_and_equations": "Add data.modules (your lessons and their readings), data.equations, figures.load (your figure scripts, in order) and generators.load + data.templates to let it show figures, equations and worked examples."
+  },
   "progress": {
     "key": "course-template",
     "stateVersion": 1,
@@ -24,6 +53,10 @@
     "position": "lastPage"
   },
   "changelog": [
-    { "version": "1.0.0", "date": "2026-09-25", "notes": "- The first version." }
+    {
+      "version": "1.0.0",
+      "date": "2026-09-25",
+      "notes": "- The first version."
+    }
   ]
 }

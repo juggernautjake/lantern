@@ -1,0 +1,6 @@
+{
+  "entries": [
+    { "term": "Example term", "definition": "What the word means, in a sentence the learner can say back.", "example": "A sentence that uses it." }
+  ],
+  "aliases": { "sample word": "Example term" }
+}

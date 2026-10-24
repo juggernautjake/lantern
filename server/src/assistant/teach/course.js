@@ -1,42 +1,35 @@
 /* ===========================================================================
-   server/src/assistant/teach/course.js — the FS course's own code, in Node.
+   server/src/assistant/teach/course.js — a course's own code and data, in Node.
    ---------------------------------------------------------------------------
    The tutor shows the course's figures, equations and generated problems and
-   takes every shown number from the course's own engine. The code is the
-   course kit in app/ (shipped with Lantern, never read from a pack: a friend's
-   pack cannot run code here). Loaded lazily and once:
+   takes every shown number from the course's own engine. Everything comes from
+   the installed pack named in its manifest's `teach` block (teach/pack.js):
+   its data files and the scripts that draw figures and generate problems,
+   hash-checked and run only from the pack's own folder. Nothing here knows a
+   subject. Loaded lazily, once per pack id and version:
 
-     figures()   the figure registry (video.js + figures/m*.js): names, steps,
-                 parts, whether a figure has a demonstration
-     engine()    the problem generators (engine.js + content.js with the 1,087
-                 templates): Course.engine.generateValid(template)
+     data(pack)      the course's modules (lessons and their readings), formulas
+     figures(pack)   the figure registry: names, steps, parts, demos, where used
+     engine(pack)    the problem generators: Course.engine.generateValid(template)
 
-   Only the FS course has them (app/fs). Any other course gets null.
+   A pack without `teach` (or without the part asked for) gets null.
    =========================================================================== */
 
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import * as teachPack from './pack.js';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const APP = process.env.LANTERN_APP_ROOT || join(HERE, '..', '..', '..', '..', 'app');
-const FS = join(APP, 'fs');
-export const available = () => existsSync(join(FS, 'data', 'equations.json'));
-export const fsRoot = () => FS;
+export const teachOf = (pack) => teachPack.of(pack);
+export const hasFigures = (pack) => { const T = teachPack.of(pack); return !!(T && T.has('figures')); };
+export const hasGenerators = (pack) => { const T = teachPack.of(pack); return !!(T && T.has('generators')); };
+/* the pack has something for the teaching tools to teach from */
+export const available = (pack) => { const T = teachPack.of(pack); return !!(T && (T.has('figures') || T.has('generators') || T.has('glossary'))); };
 
-const rd = (p) => readFileSync(p, 'utf8');
-const json = (p) => JSON.parse(rd(p));
-function run(g, rels) {
-  for (const m of rels) new Function('globalThis', 'var Course = globalThis.Course;\n' + rd(join(APP, m)))(g);
-}
-
-let FIG = null, ENG = null, DATA = null;
-
-/* modules.json, equations.json (read once) */
-export function data() {
-  if (DATA) return DATA;
-  const modules = json(join(FS, 'data', 'modules.json'));
-  const eq = json(join(FS, 'data', 'equations.json')).formulas || {};
+/* the modules (lessons and their readings) and formulas, read once */
+export function data(pack) {
+  const T = teachPack.of(pack);
+  if (!T) return { modules: [], lessons: {}, formulas: {} };
+  if (T.mem.data) return T.mem.data;
+  const modules = T.data('modules') || [];
+  const eq = ((T.data('equations') || {}).formulas) || {};
   const lessons = {};
   const formulas = {};
   for (const m of modules) {
@@ -44,19 +37,20 @@ export function data() {
     for (const s of ['overview', 'summary']) if (m[s] && typeof m[s] === 'object' && m[s].id) lessons[m[s].id] = { id: m[s].id, title: m[s].title || s, module: m.n, moduleTitle: m.title, video: null, reading: m[s].reading || m[s].content || '' };
     for (const f of m.key_formulas || []) if (f.id) formulas[f.id] = { id: f.id, module: m.n, name: f.name, form: f.formula, variables: f.variables, video: f.video || null, demo: f.demo || null, eq: eq[f.id] || {} };
   }
-  return (DATA = { modules, lessons, formulas });
+  return (T.mem.data = { modules, lessons, formulas });
 }
 
 /* the figure registry, with where each is used in the readings */
-export function figures() {
-  if (FIG) return FIG;
+export function figures(pack) {
+  const T = teachPack.of(pack);
+  if (!T || !T.has('figures')) return null;
+  if (T.mem.figures) return T.mem.figures;
   const g = { Course: { data: {} } };
-  const figs = readdirSync(join(FS, 'figures')).filter((f) => /^m\d+\.js$/.test(f)).sort((a, b) => parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10)).map((f) => 'fs/figures/' + f);
-  run(g, ['course/markdown.js', 'fs/diagrams.js', 'course/engine.js', 'course/video.js', 'course/drawing.js'].concat(figs));
+  T.load(T.cfg.figures.load, g);
   const V = g.Course.video;
   const uses = {};
   const note = (name, u) => { (uses[name] = uses[name] || []).push(u); };
-  const d = data();
+  const d = data(pack);
   const re = /^[ \t]*\[(figure|demo):([\w-]+)[ \t]*(.*)\][ \t]*$/gm;
   for (const l of Object.values(d.lessons)) {
     let m;
@@ -69,21 +63,25 @@ export function figures() {
     }
   }
   for (const f of Object.values(d.formulas)) if (f.demo && f.demo.figure) note(f.demo.figure, { ref: null, formula: f.id, lesson: f.name, module: f.module, kind: 'demo', caption: f.demo.caption || '', params: f.demo.params || {} });
-  return (FIG = { V, uses, drawing: g.Course.drawing });
+  return (T.mem.figures = { V, uses, drawing: g.Course.drawing });
 }
 
 /* the generators */
-export function engine() {
-  if (ENG) return ENG;
-  const g = { Course: { data: { modules: [], questions: [], templates: json(join(FS, 'data', 'templates.json')), flashcards: [], glossary: [], references: { docs: [], chunks: [] } } } };
-  run(g, ['course/markdown.js', 'fs/diagrams.js', 'course/engine.js', 'course/grader.js', 'fs/content.js']);
-  return (ENG = { C: g.Course, templates: g.Course.data.templates });
+export function engine(pack) {
+  const T = teachPack.of(pack);
+  if (!T || !T.has('generators')) return null;
+  if (T.mem.engine) return T.mem.engine;
+  const g = { Course: { data: { modules: [], questions: [], templates: T.data('templates') || [], flashcards: [], glossary: [], references: { docs: [], chunks: [] } } } };
+  T.load(T.cfg.generators.load, g);
+  return (T.mem.engine = { C: g.Course, templates: g.Course.data.templates });
 }
 
 const PART_RE = /data-part="([^"]+)"/g;
 /* the named parts of a figure (with the words drawn inside each) and its steps */
-export function describeFigure(name, params) {
-  const { V, uses } = figures();
+export function describeFigure(pack, name, params) {
+  const F = figures(pack);
+  if (!F) return null;
+  const { V, uses } = F;
   const f = V.figures[name];
   if (!f) return null;
   let svg = '';

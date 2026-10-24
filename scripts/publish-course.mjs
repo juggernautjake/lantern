@@ -2,7 +2,7 @@
 /* ===========================================================================
    scripts/publish-course.mjs — put a course (or a new version of one) on the hub.
    ---------------------------------------------------------------------------
-       node scripts/publish-course.mjs <course> [--publish | --draft] [--open] [--listed] [--no-build] [--force]
+       node scripts/publish-course.mjs <course> [--publish | --draft] [--open] [--listed] [--no-build] [--force] [--skip-media-check]
 
    1  validates and builds courses/<course> into a pack (scripts/build-pack.mjs)
    2  uploads it to the hub's course-packs storage
@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from './build-pack.mjs';
 import { readPresence } from '../server/src/platform/eco.js';
 import { notesSince, parsePack } from '../server/src/platform/packs.js';
+import { checkPublic } from './lib-r2.mjs';
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..');
 
@@ -46,15 +47,25 @@ function loadEnv() {
 async function viaApp(file, flags) {
   const p = readPresence('lantern');
   if (!p) return null;
-  let r;
-  try {
-    r = await fetch('http://127.0.0.1:' + p.port + '/api/local/publish', {
-      method: 'POST', headers: { 'content-type': 'application/json', 'x-eco-token': p.token },
-      body: JSON.stringify(Object.assign({ file }, flags)), signal: AbortSignal.timeout(10 * 60000),
+  // node:http, not fetch: fetch stops waiting for the answer after 5 minutes,
+  // and a pack with narration takes the app longer than that to upload
+  const http = await import('node:http');
+  const payload = JSON.stringify(Object.assign({ file }, flags));
+  const res = await new Promise((resolveRes) => {
+    const req = http.request({ host: '127.0.0.1', port: p.port, path: '/api/local/publish', method: 'POST',
+      headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload), 'x-eco-token': p.token } }, (r) => {
+      let body = '';
+      r.on('data', (d) => { body += d; });
+      r.on('end', () => resolveRes({ status: r.statusCode, body }));
     });
-  } catch (e) { return null; }   // not running
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || ('The app answered ' + r.status));
+    req.setTimeout(3 * 60 * 60000, () => req.destroy(new Error('the app took over three hours')));
+    req.on('error', (e) => resolveRes({ error: e }));
+    req.end(payload);
+  });
+  if (res.error) { if (res.error.code === 'ECONNREFUSED') return null; throw new Error('The app stopped answering: ' + res.error.message); }
+  let j = {};
+  try { j = JSON.parse(res.body); } catch { /* not JSON */ }
+  if (res.status < 200 || res.status >= 300) throw new Error(j.error || ('The app answered ' + res.status));
   return j;
 }
 
@@ -98,12 +109,25 @@ async function viaServiceKey(file, flags) {
 export async function publish(id, flags) {
   const f = flags || {};
   let file = join(ROOT, 'dist', 'packs', id + '.lpack');
+  let manifest = null;
   if (!f.noBuild) {
     const b = await build(id, { quiet: !!f.quiet });
+    manifest = b.manifest;
     if (b.warnings.length && !f.force) throw new Error('Not published: fix the warnings above, or pass --force if you are sure.');
     file = b.file;
   }
   if (!existsSync(file)) throw new Error('There is no built pack at ' + file + '.');
+  // A pack with external media (manifest.media) is published only once every media file is at its public URL,
+  // or installed copies would have nothing to download. --skip-media-check turns this off.
+  if (!f.skipMediaCheck) {
+    if (!manifest) manifest = parsePack(readFileSync(file)).manifest;
+    if (manifest.media) {
+      if (!manifest.media.base) throw new Error('This pack has external media but no base URL: put R2_PUBLIC_URL in .env, then build again.');
+      if (!f.quiet) console.log('  checking that ' + Object.keys(manifest.media.files).length + ' media files are online…');
+      const c = await checkPublic(manifest.media);
+      if (c.missing.length) throw new Error('Not published: ' + c.missing.length + ' of ' + c.total + ' media files are not at the public URL yet (first: ' + c.missing[0] + '). Run: node scripts/upload-media.mjs ' + id + '   (or pass --skip-media-check).');
+    }
+  }
   const opts = { status: f.status, visibility: f.visibility, listed: f.listed, force: !!f.force };
   let out = await viaApp(resolve(file), opts);
   let how = 'through the Lantern app';
@@ -115,10 +139,10 @@ export async function publish(id, flags) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const a = process.argv.slice(2);
   const id = a.find((x) => !x.startsWith('--'));
-  if (!id) { console.error('Usage: node scripts/publish-course.mjs <course> [--publish|--draft] [--open] [--listed] [--no-build] [--force]'); process.exit(2); }
+  if (!id) { console.error('Usage: node scripts/publish-course.mjs <course> [--publish|--draft] [--open] [--listed] [--no-build] [--force] [--skip-media-check]'); process.exit(2); }
   const flags = { status: a.includes('--publish') ? 'published' : a.includes('--draft') ? 'draft' : undefined,
     visibility: a.includes('--open') ? 'open' : undefined, listed: a.includes('--listed') ? true : undefined,
-    noBuild: a.includes('--no-build'), force: a.includes('--force') };
+    noBuild: a.includes('--no-build'), force: a.includes('--force'), skipMediaCheck: a.includes('--skip-media-check') };
   publish(id, flags).then((r) => {
     console.log('\nPublished ' + r.id + ' ' + r.version + ' (' + r.status + ') ' + r.how + (r.previous ? ', replacing ' + r.previous : '') + '.');
     if (r.status === 'draft') console.log('It is a draft: only you can see it. Publish it with --publish when it is ready.');

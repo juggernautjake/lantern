@@ -163,7 +163,7 @@ export function voice() {
     setSettings: (patch) => settings.set('assistant.voice', Object.assign({}, voiceSettings(), patch)),
     getConfig: voiceConfig,
     cacheDir: join(dataDir(), 'assistant', 'voice-cache'),
-    pronounce: [[/\bCFML\b/g, 'C F M L'], [/\bCFC\b/g, 'C F C'], [/\bSQL\b/g, 'sequel']],
+    pronounce: [[/\bSQL\b/g, 'sequel']],   // a course's own words come from its pack (assets/videos/pronounce.json)
     fetch: f,
   }));
 }

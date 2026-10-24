@@ -28,7 +28,7 @@
 
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, normalize, sep } from 'node:path';
 import { one, all, run, json } from '../db/db.js';
 import { paths, version as platformVersion } from './config.js';
@@ -46,7 +46,7 @@ export class PackError extends Error {
 
 /* ------------------------------------------------------------ manifest --- */
 /* Required: id, title, version, entry, lessons[{ id, title }].
-   Optional: description, level, subject, units[{ id, title }], storage { keys[] },
+   Optional: teach { data, figures, generators, scope, prompts, tools, reference, lawBasis, glossary, review, videos, library }, description, level, subject, units[{ id, title }], storage { keys[] },
              progress { key, lessons, exercises, doneField, passedField, seconds, position },
              minPlatform, changelog[{ version, date, notes }], assets[{ path, size, sha256 }],
              color, icon, estimatedHours, tags[] */
@@ -69,6 +69,40 @@ export function validateManifest(m) {
   if (m.minPlatform && !VER_RX.test(String(m.minPlatform))) errs.push('minPlatform must look like 1.2.3.');
   if (m.storage && m.storage.keys && !Array.isArray(m.storage.keys)) errs.push('storage.keys must be a list.');
   if (m.retired !== undefined && (!Array.isArray(m.retired) || m.retired.some((x) => typeof x !== 'string'))) errs.push('retired must be a list of lesson ids.');
+  if (m.media !== undefined) errs.push(...validateMedia(m.media));
+  if (m.teach !== undefined) errs.push(...validateTeach(m.teach));
+  return errs;
+}
+
+/* manifest.teach: what the in-app assistant may teach from (assistant/teach/pack.js reads it).
+   Every string inside it that names a file is a path inside the pack and must stay inside it. */
+function validateTeach(t) {
+  if (!t || typeof t !== 'object' || Array.isArray(t)) return ['teach must be an object.'];
+  const bad = [];
+  const walk = (v, at) => {
+    if (typeof v === 'string') { if (v.startsWith('teach/') && (v.includes('..') || v.includes(String.fromCharCode(92)))) bad.push(at + ' is not a path inside the pack.'); }
+    else if (Array.isArray(v)) v.forEach((x, i) => walk(x, at + '[' + i + ']'));
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, at + '.' + k);
+  };
+  walk(t, 'teach');
+  return bad;
+}
+
+/* manifest.media: files kept OUT of the pack and fetched from a public URL
+   (Cloudflare R2): { base, files: { "assets/videos/x.mp4": { key, size, sha256 } } }.
+   The installed app downloads them into the pack's own folder (platform/media.js). */
+const KEY_RX = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,300}$/;
+function validateMedia(md) {
+  if (!md || typeof md !== 'object' || Array.isArray(md)) return ['media must be { base, files }.'];
+  const errs = [];
+  if (typeof md.base !== 'string' || (md.base && !/^https?:\/\//.test(md.base))) errs.push('media.base must be a web address (https://…).');
+  if (!md.files || typeof md.files !== 'object' || Array.isArray(md.files)) return errs.concat('media.files must list { key, size, sha256 } by path.');
+  for (const [path, f] of Object.entries(md.files)) {
+    try { cleanRel(path); } catch (e) { errs.push('media path ' + path + ' is not allowed.'); continue; }
+    if (!f || !KEY_RX.test(String(f.key || '')) || String(f.key).includes('..')) errs.push('media ' + path + ' has no usable key.');
+    else if (!Number.isInteger(f.size) || f.size < 0) errs.push('media ' + path + ' has no size.');
+    else if (!/^[0-9a-f]{64}$/.test(String(f.sha256 || ''))) errs.push('media ' + path + ' has no sha256.');
+  }
   return errs;
 }
 
@@ -212,6 +246,8 @@ export function install(input, opts) {
     writeFileSync(f, buf);
   }
   writeFileSync(join(tmp, 'manifest.json'), JSON.stringify(m, null, 2));
+  // external media the last version already downloaded (same sha256): linked in, not fetched again
+  if (m.media && cur) reuseMedia(m, prevManifest, join(root, m.id, cur.version), tmp);
   rmSync(dir, { recursive: true, force: true });
   renameDir(tmp, dir);
 
@@ -229,7 +265,30 @@ export function install(input, opts) {
       notesSince(m, cur ? cur.version : null), cur ? 'Updated from ' + cur.version + '. Your progress is kept.' : 'Added to your courses.');
   }
   prune(root, m.id, [m.version, cur ? cur.version : null]);
+  if (m.media && afterInstall) { try { afterInstall(m.id); } catch (e) { /* the background download is best effort */ } }
   return { id: m.id, version: m.version, previous: cur ? cur.version : null, changed, droppedLessons: dropped };
+}
+
+/* platform/media.js registers itself here: it starts downloading a new pack's media. */
+let afterInstall = null;
+export function onInstalled(fn) { afterInstall = fn; }
+
+/* Files the previous version already holds with the same sha256 are hard-linked
+   (or copied) into the new folder, so an update downloads only what changed. */
+function reuseMedia(m, prev, prevDir, tmp) {
+  // …or the same bytes inside the previous pack (before the media moved out of it)
+  const old = Object.assign({}, Object.fromEntries(((prev && prev.assets) || []).map((a) => [a.path, a])), (prev && prev.media && prev.media.files) || {});
+  for (const [rel, f] of Object.entries(m.media.files)) {
+    const o = old[rel];
+    if (!o || o.sha256 !== f.sha256) continue;
+    const from = join(prevDir, rel);
+    try {
+      if (statSync(from).size !== f.size) continue;
+      const to = join(tmp, rel);
+      mkdirSync(dirname(to), { recursive: true });
+      try { linkSync(from, to); } catch (e) { copyFileSync(from, to); }
+    } catch (e) { /* not there: it will be downloaded */ }
+  }
 }
 
 /* renameSync is atomic on one volume (both live under the packs folder). It

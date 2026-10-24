@@ -876,7 +876,17 @@ function wake() {
     wakeWord: wakeName,
     isSpeaking: () => A.speaking,
     speakingText: () => A.sayingText || '',
-    onState: (st) => { A.listening = st === 'listening'; if (!A.speaking && !A.request && !A.thinking) { setLamp('idle'); setStatus(readyText()); } },
+    // The recognizer ends and restarts its session often (every few seconds, or
+    // faster when the microphone is shared): a routine restart must not flip the
+    // status back and forth. Only a listener that stays down for a while shows it.
+    onState: (st) => {
+      const show = () => { if (!A.speaking && !A.request && !A.thinking) { setLamp('idle'); setStatus(readyText()); } };
+      if (A.downTimer) { clearTimeout(A.downTimer); A.downTimer = null; }
+      if (st === 'stopped' && A.recWanted) { A.downTimer = setTimeout(() => { A.downTimer = null; A.listening = false; show(); }, 6000); return; }
+      const was = A.listening;
+      A.listening = st === 'listening';
+      if (was !== A.listening || st !== 'listening') show();
+    },
     onBlocked: () => setStatus('The microphone is blocked. Allow it in the browser to use “' + wakeName() + '”.'),
     // the name, heard mid-phrase: light up straight away; if Lantern is talking, it stops to listen
     onWake: () => { if (A.speaking) stopSpeaking(); setLamp('listen'); setStatus('I heard my name…'); },

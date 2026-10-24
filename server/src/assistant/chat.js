@@ -26,7 +26,7 @@ import * as local from '../platform/local.js';
 import * as catalogue from './catalogue.js';
 import * as scope from './teach/scope.js';
 import * as cues from './teach/cues.js';
-import * as teachCourse from './teach/course.js';
+import * as teachPack from './teach/pack.js';
 import { messagesStream } from './teach/stream.js';
 
 const MAX_ROUNDS = 6;
@@ -66,23 +66,26 @@ export async function chat(spec, hooks) {
   const d = context.describe(uid);
   const provider = L.provider();
   const pack = context.currentPack();
-  const teach = !!(pack && pack.id === 'fs' && teachCourse.available());
+  // the course's own teaching (its manifest's teach block); a pack without one gets the generic assistant
+  const T = teachPack.of(pack);
+  const teach = !!T;
+  const sc = teach ? scope.resolve(pack) : null;
   S.graded = !!(d && (/check|exam/i.test(String(d.kind || '')) || (s.look && s.look.question && s.look.question.graded)));
   if (teach) {
     // on the course, or politely redirected: no model, no tools, no visuals for anything else
-    const g = await scope.gate(text, { following: lastOnCourse && history.length > 0, course: true, classify: provider === 'anthropic' && L.ready() ? scope.haikuClassifier(L) : null });
+    const g = await scope.gate(text, { following: lastOnCourse && history.length > 0, course: true, scope: sc, classify: provider === 'anthropic' && L.ready() ? scope.haikuClassifier(L, sc) : null });
     timing.gate = g.ms;
     if (g.verdict !== 'on') {
-      const reply = g.verdict === 'injection' ? scope.refusal(pack.title) : scope.redirect(pack.title);
+      const reply = g.verdict === 'injection' ? scope.refusal(pack.title) : scope.redirect(pack.title, sc);
       lastOnCourse = false;
       onText(reply);
       return { reply, actions: [], via: 'scope', scope: g, timing };
     }
     lastOnCourse = true;
   }
-  const popts = { teach: !!(context.currentPack() && context.currentPack().id === 'fs'), name: firstName(local.name()), webSearch: provider === 'anthropic' ? true : false };
+  const popts = { teach: T, scope: sc, name: firstName(local.name()), webSearch: provider === 'anthropic' ? true : false };
   const system = prompts.system(d, popts);
-  const defs = tools.definitions({ allowCode: S.allowCode, teach });
+  const defs = tools.definitions({ allowCode: S.allowCode, teach: T });
   try {
     const out = provider === 'anthropic'
       ? await claudeLoop({ system: prompts.systemBlocks(d, popts), text, defs, S, L, onText })

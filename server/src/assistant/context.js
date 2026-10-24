@@ -261,7 +261,7 @@ export function describe(uid, courseId, ref) {
   return {
     course: lc.course, unit: lc.unit, item: lc.item,
     kind: (here.course === pack.id && here.kind) || (lc.item && lc.item.kind) || null,
-    // a reading lesson (the FS course lists its lessons as kind "lesson") is not a graded item
+    // a reading lesson (some courses list their lessons as kind "lesson") is not a graded item
     exercise: item && item.kind !== 'lesson' ? { id: item.id, kind: item.kind, title: item.title, prompt: item.prompt || '', passed: item.passed, attempts: item.attempts, hintsTaken: hintsTaken(uid, pack, item), hintsTotal: (item.hints || []).length } : null,
     progress: { percent: ov.percent, finished: ov.finished, count: ov.count, lessons: ov.lessons, current: ov.current || null, next: ov.next || null, continue: ov.continue || null, minutesLeft: ov.minutesLeft },
     reading: !ref || ref === here.ref ? reading(pack.id) : null,
@@ -277,7 +277,7 @@ export function describe(uid, courseId, ref) {
 
 /* The number a learner sees for a course's own module id n. A unit's n is the number
    shown (its place in the course); its id is 'u' + the module's id, which stays put when
-   modules are shown in another order (FS: docs/dev/fs-reorder-plan.md). */
+   modules are shown in another order (see docs/dev/authoring-courses.md). */
 export function shownModule(pack) {
   const units = (pack && pack.manifest && pack.manifest.units) || [];
   return (n) => { if (n == null) return n; const u = units.find((x) => x.id === 'u' + n); return u && u.n != null ? u.n : n; };

@@ -24,6 +24,7 @@ import { extname } from 'node:path';
 import { all, run, one, handle as dbHandle, file as dbFile, recoveredFrom } from '../db/db.js';
 import * as config from './config.js';
 import * as packs from './packs.js';
+import * as media from './media.js';
 import * as progress from './progress.js';
 import * as settings from './settings.js';
 import * as backups from './backups.js';
@@ -79,6 +80,8 @@ export function courseList(uid) {
   const installed = packs.list().map((p) => Object.assign(progress.summary(uid, p), {
     id: p.id, title: p.title, version: p.version, description: p.manifest.description || '', level: p.manifest.level || '',
     installed: true, source: p.source, color: p.manifest.color || null,
+    // narration kept outside the pack and downloading in the background: { have, total, bytes, totalBytes, phase }
+    ...(p.manifest.media ? { media: media.status(p.id) } : {}),
   }));
   const have = new Set(installed.map((c) => c.id));
   const st = engine.status();
@@ -192,7 +195,12 @@ export function register(r) {
   r.get('/packs/:id/*', async ({ req, params, url, send }) => {
     const rel = decodeURIComponent(url.pathname).replace(/^\/packs\/[^/]+\/?/, '') || null;
     const f = packs.fileFor(params.id, rel);
-    if (!f) return { status: 404, body: { error: 'Not in this course.' } };
+    if (!f) {
+      // external media not downloaded yet: play it from the internet meanwhile (the browser's range requests go straight to it)
+      const away = media.redirectFor(params.id, rel);
+      if (away) return send(302, '', { location: away, 'cache-control': 'no-store' });
+      return { status: 404, body: { error: 'Not in this course.' } };
+    }
     const text = /^\.(html?|css|js|mjs|json|txt|svg)$/i.test(extname(f));
     const type = mimeFor(f) + (text ? '; charset=utf-8' : '');
     const data = readFileSync(f);

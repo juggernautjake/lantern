@@ -2,6 +2,13 @@
 
 Written 22 Oct 2026. Analysis only: no code was changed. Line numbers are from the working tree on that date. `app/course/study.js` and the FS data were being edited at the same time, so their line numbers may have moved.
 
+## Status (2026-10-23, unreleased)
+
+Applied with the study-flow and UI-audit work, keeping every option the plan flags:
+- **a1** done as the plan's table says: Practice's filters, *Solve-only*, *Topics I choose*, *Where to focus* and the weak-spot paper all stay reachable (see `study-flow-plan.md`, Status). **a2** done by moving the study and look-up pages to the top of the rail (no new Equations entry: the equation drill is on Study). **a3** done (names, palette count). **a4** done (one module table, on Progress). **a7** done. **a9** done (standing pages step between themselves).
+- **f1, f2, f4, f5, f7** fixed, and **f3** (the backup now uses Lantern's format and carries the notes) and **f10** (the unsure mark is kept). **c12** and the dead `.hosted` rules (a5) removed.
+- **Not touched:** a5's owner decision, a6, a8, b1–b8, c1–c11, d1–d7, e1–e8, f6, f8, f9, f11. **d1** edits `buildExam`, which the mock exam rule says to leave alone; the rest is code, performance or script work that changes no screen.
+
 ## The owner's rules this plan follows
 
 - **Consolidate and smooth; never remove a capability.** The owner likes the course's current depth. Every merge below keeps every capability, and section (a) says where each one lives afterwards.

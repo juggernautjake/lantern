@@ -5,8 +5,9 @@
    one of the course's own problem generators (Course.engine.generateValid, the
    same code the practice sets use) with fresh numbers and hands back the
    question, every step's computed result and the answer, plus the generator's
-   own diagram. law_basis gathers the lessons a land-law or boundary scenario
-   must rest on and marks what is Texas-specific.
+   own diagram. law_basis (only for a course whose teach block has lawBasis)
+   gathers the lessons a scenario-style question must rest on, and marks which
+   are specific to one jurisdiction, by the pattern the course gives.
    =========================================================================== */
 
 import * as course from './course.js';
@@ -16,10 +17,10 @@ const tagsOf = (t) => (Array.isArray(t.tags) ? t.tags.map(String) : []);
 const jurisdictionOf = (t) => { const j = tagsOf(t).find((x) => /^jurisdiction:/i.test(x)); return j ? j.split(':')[1].toUpperCase() : null; };
 const clean = (s) => String(s == null ? '' : s).replace(/\*\*/g, '').replace(/[ \t]+/g, ' ').trim();
 
-export function search(topic, limit) {
+export function search(pack, topic, limit) {
   const q = words(topic);
   if (!q.length) return [];
-  const { templates } = course.engine();
+  const { templates } = course.engine(pack);
   const out = [];
   for (const t of templates) {
     const head = new Set(words([t.name, t.subcategory, t.category, tagsOf(t).join(' '), t.description].join(' ')));
@@ -34,14 +35,14 @@ export function search(topic, limit) {
 const hide = (t) => ({ key: t.key, name: t.name, sub: t.subcategory, type: t.question_type, jurisdiction: jurisdictionOf(t) });
 
 /* topic (words) or key (a generator's key from an earlier call) */
-export function generate(inp) {
-  if (!course.available()) return { error: 'This course has no problem generators.' };
-  const { C, templates } = course.engine();
+export function generate(pack, inp) {
+  if (!course.hasGenerators(pack)) return { error: 'This course has no problem generators.' };
+  const { C, templates } = course.engine(pack);
   let t = inp.key ? templates.find((x) => x.key === inp.key) : null;
   let others = [];
   if (!t) {
-    const hits = search(inp.topic, 5);
-    if (!hits.length) return { error: 'No generator matches "' + (inp.topic || '') + '". Try the course words (differential leveling, horizontal curve, traverse closure, EDM, cut and fill…).' };
+    const hits = search(pack, inp.topic, 5);
+    if (!hits.length) return { error: 'No generator matches "' + (inp.topic || '') + '". Try the words the course uses.' };
     t = hits[0];
     others = hits.slice(1).map(hide);
   }
@@ -61,9 +62,12 @@ export function generate(inp) {
 }
 
 /* land law and boundary: the lessons to rest a scenario on */
-export function lawBasis(topic) {
+export function lawBasis(pack, topic) {
+  const T = course.teachOf(pack);
+  const cfg = T && T.has("lawBasis") ? T.cfg.lawBasis : null;
+  if (!cfg) return { error: "This course has no scenario basis." };
   const q = words(topic);
-  const D = course.data();
+  const D = course.data(pack);
   const rows = Object.values(D.lessons).map((l) => {
     const head = new Set(words(l.title + ' ' + (l.objective || '')));
     const body = new Set(words(l.reading.slice(0, 6000)));
@@ -71,14 +75,15 @@ export function lawBasis(topic) {
     for (const w of q) { if (head.has(w)) s += 3; else if (body.has(w)) s += 1; }
     return { l, s };
   }).filter((x) => x.s >= 3).sort((a, b) => b.s - a.s).slice(0, 4);
-  const texas = (txt) => /\btexas\b|\bTX\b|vara|general land office|\bGLO\b|spanish|mexican grant/i.test(txt);
+  const local = cfg.jurisdictionPattern ? new RegExp(cfg.jurisdictionPattern, "i") : null;
+  const specific = (txt) => !!local && local.test(txt);
   const lessons = rows.map(({ l }) => {
     const paras = l.reading.split(/\n\s*\n/).map((p) => clean(p.replace(/\[(figure|demo|video):[^\]]*\]/g, '').replace(/^#+\s*/, ''))).filter((p) => p.length > 60);
     const pick = paras.filter((p) => q.some((w) => words(p).includes(w))).slice(0, 3);
-    return { ref: l.id, lesson: l.title, module: l.module, texasSpecific: texas(l.reading), says: (pick.length ? pick : paras.slice(0, 2)).map((p) => p.slice(0, 380)) };
+    return { ref: l.id, lesson: l.title, module: l.module, jurisdictionSpecific: specific(l.reading), says: (pick.length ? pick : paras.slice(0, 2)).map((p) => p.slice(0, 380)) };
   });
-  const tagged = course.available() ? search(topic, 8).filter((t) => jurisdictionOf(t)).map(hide) : [];
+  const tagged = course.hasGenerators(pack) ? search(pack, topic, 8).filter((t) => jurisdictionOf(t)).map(hide) : [];
   if (!lessons.length) return { error: 'No lesson covers "' + topic + '".' };
-  return { out: { lessons, texas_tagged_practice: tagged,
-    how: 'Write a short realistic scenario (names, a place, dates, calls) that applies ONLY what these lessons say. Cite each lesson by title. Say plainly which rule is US-general and which is Texas-specific (texasSpecific lessons, jurisdiction:TX items). If the lessons do not settle it, say so; do not invent a rule.' } };
+  return { out: { lessons, jurisdiction_tagged_practice: tagged,
+    how: cfg.how || "Write a short realistic scenario that applies ONLY what these lessons say. Cite each lesson by title. Say plainly which rule is general and which is specific to one jurisdiction (jurisdictionSpecific lessons, jurisdiction-tagged items). If the lessons do not settle it, say so; do not invent a rule." } };
 }

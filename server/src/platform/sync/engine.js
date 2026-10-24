@@ -542,8 +542,14 @@ export async function publishPack(buf, opts) {
   if (buf.length > PART_SIZE) {
     const n = Math.ceil(buf.length / PART_SIZE);
     for (let i = 0; i < n; i++) {
-      if (s.expires_at && s.expires_at - Date.now() < 60000) s = await refresh();
-      await need().upload(path + '.p' + (i + 1), buf.subarray(i * PART_SIZE, Math.min(buf.length, (i + 1) * PART_SIZE)), s.access_token);
+      // a part that fails (a dropped connection, the hub busy) is sent again, a few times, after a pause
+      for (let attempt = 1; ; attempt++) {
+        if (s.expires_at && s.expires_at - Date.now() < 60000) s = await refresh();
+        try { await need().upload(path + '.p' + (i + 1), buf.subarray(i * PART_SIZE, Math.min(buf.length, (i + 1) * PART_SIZE)), s.access_token); break; } catch (e) {
+          if (attempt >= 5 || (e.kind && e.kind !== 'offline')) throw e;
+          await new Promise((r) => setTimeout(r, 5000 * attempt));
+        }
+      }
     }
     packPath = path + '?parts=' + n;
   } else await need().upload(path, buf, s.access_token);

@@ -26,6 +26,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import * as packs from '../../platform/packs.js';
+import { videoDir } from './pack.js';
 
 const STOP = new Set('a an and are as at be by can do does for from has have how i in into is it its me my of on or so than that the their them then there these this to was we what when where which who why will with you your about explain tell show if get use used using work works need want make find should would could really exactly mean means'.split(' '));
 const norm = (w) => (w.length > 4 && w.endsWith('s') && !w.endsWith('ss') && !w.endsWith('us') ? w.slice(0, -1) : w);
@@ -73,7 +74,7 @@ function build(pack, kn, videos) {
   const push = (m, id, s) => { if (!id || !s) return; m.set(id, (m.get(id) || '') + ' ' + s); };
   for (const f of (kn && kn.formulas) || []) push(eq, f.video, [f.name, f.form, f.means, (f.symbols || []).map((s) => s[0] + ' ' + s[1]).join(' ')].filter(Boolean).join(' '));
   for (const h of (kn && kn.handbook) || []) for (const id of h.videos || []) push(hb, id, [h.section, h.kind === 'equation' ? h.form : (h.symbols || []).map((s) => s.symbol + ' ' + s.meaning).join(' ')].join(' '));
-  const idx = packs.fileFor(pack.id, 'assets/videos/index.json'), dir = idx ? dirname(idx) : null;
+  const idx = packs.fileFor(pack.id, videoDir(pack) + '/index.json'), dir = idx ? dirname(idx) : null;
   const docs = [], chapDocs = [];
   for (const v of videos) {
     let tl = {};

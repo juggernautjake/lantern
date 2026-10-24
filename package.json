@@ -1,6 +1,6 @@
 {
   "name": "lantern",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Lantern: a learning platform that runs on your own computer. Courses work offline; a free hosted hub shares courses and keeps progress in sync.",
   "type": "module",

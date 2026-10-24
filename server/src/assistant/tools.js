@@ -22,7 +22,7 @@ import * as visuals from './teach/visuals.js';
 import * as examples from './teach/examples.js';
 import * as draw from './teach/draw.js';
 import * as glossary from './teach/glossary.js';
-import * as teachCourse from './teach/course.js';
+import * as teachPack from './teach/pack.js';
 
 const obj = (props, required) => ({ type: 'object', properties: props || {}, required: required || [], additionalProperties: false });
 
@@ -35,12 +35,12 @@ export const DEFS = {
   find_resources: { description: 'Free videos, articles, docs and discussions about the current lesson (or a topic), from YouTube, Crash Course, Khan Academy, Codecademy, freeCodeCamp, MDN, Wikipedia, Reddit and the course\'s docs. Shows them on screen as cards.', input_schema: obj({ topic: { type: 'string', description: 'optional: a topic instead of the current lesson' } }) },
   play_video: { description: 'Search YouTube and play the best match in the app\'s mini player: music, or a video the learner names. For a video that teaches a course topic use find_videos and show_videos instead. query: what to play, e.g. "lofi study music" or "cfqueryparam tutorial".', input_schema: obj({ query: { type: 'string' } }, ['query']) },
   look_up: { description: 'Search the web and return the top results (title, link, snippet). Use for facts and current information.', input_schema: obj({ query: { type: 'string' } }, ['query']) },
-  lesson_video: { description: 'The script of a lesson video in this course: its chapters, every word the narrator says, what the board, tables and diagrams show, the recap, and its questions with their answers. With no input, the video of the lesson open now; with lesson, a lesson id (m3-l2) or any video id: m3-v2 a lesson video, m3-f4 a formula explained (why it has its form, where its constants come from), m3-e1 a worked example solved step by step, calc-5 a TI-30Xa how-to; with query, the videos that match (titles, chapters, scripts). Use it to explain a video again, to quote its numbers and steps exactly, or to point the learner to the right video and chapter.', input_schema: obj({ lesson: { type: 'string' }, query: { type: 'string' } }) },
+  lesson_video: { description: "The script of a lesson video in this course: its chapters, every word the narrator says, what the board, tables and diagrams show, the recap, and its questions with their answers. With no input, the video of the lesson open now; with lesson, a lesson id or any video id from find_videos; with query, the videos that match (titles, chapters, scripts). Use it to explain a video again, to quote its numbers and steps exactly, or to point the learner to the right video and chapter.", input_schema: obj({ lesson: { type: 'string' }, query: { type: 'string' } }) },
   read_notes: { description: 'The learner\'s own notes in this course, in full. Use when they mention their notes, ask what they wrote, want to be quizzed on them or reviewed, or ask about something they may have written down. With no query, the most recently edited notes; with a query, the notes whose name or text mention it; with a title, that note.', input_schema: obj({ query: { type: 'string', description: 'optional: words to look for' }, title: { type: 'string', description: 'optional: the name of one note' } }) },
   save_note: { description: 'Write something into the learner\'s notes in the course that is open. ONLY when they ask you to write, note, jot or save something down (or agree when you offer). mode "append" (the default) adds to the note with that title, making it if needed; "new" starts a separate note. Write it in their voice, short and plain: headings with #, lists with -, maths in plain symbols.', input_schema: obj({ title: { type: 'string' }, text: { type: 'string' }, mode: { type: 'string', enum: ['append', 'new'] } }, ['title', 'text']) },
-  search_course: { description: 'Search everything in the course: every lesson\'s reading, the glossary, the flashcards, every formula (what it means, why it has its form, when and how to use it), every video\'s chapters, the course\'s guide to the NCEES FS Reference Handbook (its notation, symbols and printed pages) and the library of standards. Returns the best passages with where each is from. Use it before explaining a term, formula, symbol, procedure or rule, so your answer matches the course. kinds (optional) narrows it: reading, glossary, card, formula, video, handbook, handbook-notes, library.', input_schema: obj({ query: { type: 'string' }, kinds: { type: 'array', items: { type: 'string', enum: ['reading', 'glossary', 'card', 'formula', 'video', 'handbook', 'handbook-notes', 'library'] } } }, ['query']) },
-  handbook: { description: 'An item of the NCEES FS Reference Handbook 2.5 (the one reference on exam day): an equation, symbol, constant, table, figure or supplied standard, with its printed page, its exact form and symbols, what the exam asks about it, and what the course says about it (why the formula has its form, when and how to use it, the lessons and videos that teach it). By query (words or a symbol), id, or printed page. Always cite the page it gives ("Handbook p. 10 — Horizontal circular curves"). Shows the learner an Open button for each item you look up, which opens the detail of that item in the reference panel of the course; part (optional): the symbol or figure part to pick in it ("T", "PC").', input_schema: obj({ query: { type: 'string' }, id: { type: 'string' }, page: { type: 'string' }, part: { type: 'string' } }) },
-  standard: { description: 'A code or standard the exam supplies or the course teaches (ALTA/NSPS, the FEMA Elevation Certificate, FGDC/NSSDA, NGS guidelines, the BLM Manual, OSHA trenching…): who publishes it, what it requires (in the course\'s own words), whether it is supplied on exam day, the lessons on it, and for a public-domain document the pages of its own text that match the query.', input_schema: obj({ query: { type: 'string' }, id: { type: 'string' } }) },
+  search_course: { description: "Search everything in the course: every lesson's reading, the glossary, the flashcards, every formula (what it means, why it has its form, when and how to use it), every video's chapters and, when the course has one, its reference (notation, symbols and printed pages) and its library of standards. Returns the best passages with where each is from. Use it before explaining a term, formula, symbol, procedure or rule, so your answer matches the course. kinds (optional) narrows it: reading, glossary, card, formula, video, handbook, handbook-notes, library.", input_schema: obj({ query: { type: 'string' }, kinds: { type: 'array', items: { type: 'string', enum: ['reading', 'glossary', 'card', 'formula', 'video', 'handbook', 'handbook-notes', 'library'] } } }, ['query']) },
+  handbook: { description: "An item of the course's reference (the one document or sheet the learner may use, such as a handbook): an equation, symbol, constant, table, figure or supplied standard, with its printed page, its exact form and symbols, and what the course says about it (why the formula has its form, when and how to use it, the lessons and videos that teach it). By query (words or a symbol), id, or printed page. Always cite the page it gives. Shows the learner an Open button for each item you look up, which opens the detail of that item in the reference panel of the course; part (optional): the symbol or figure part to pick in it.", input_schema: obj({ query: { type: 'string' }, id: { type: 'string' }, page: { type: 'string' }, part: { type: 'string' } }) },
+  standard: { description: "A code or standard the course teaches or the reference supplies: who publishes it, what it requires (in the course's own words), whether it is supplied, the lessons on it, and for a public-domain document the pages of its own text that match the query.", input_schema: obj({ query: { type: 'string' }, id: { type: 'string' } }) },
   find_videos: { description: 'Videos for a topic (or, with no topic, for the page open now): the course\'s own videos (lesson videos, formulas explained, worked examples, calculator how-tos) with the chapter that teaches it and the lesson where each is shown, and checked free videos from YouTube and Khan Academy. Only these outside videos may ever be recommended. Then call show_videos with the ids you recommend.', input_schema: obj({ topic: { type: 'string' } }) },
   show_videos: { description: 'Show videos in the chat as cards: a course video is a compact card in the chat (it does not start by itself; the learner presses Play) with an Open lesson button; an outside video is a link that opens in their browser. ids: from find_videos (course ids like m2-v5 or m3-f4; outside ids like yt:… or ka:…), at most 3. t (optional): a course video starts at this second (a chapter start); end (optional): it plays only to this second, so a recorded segment that explains the point plays with its recorded voice. Each course video gets a card id (c1…) for cues: [[c1:play 95 140]], [[c1:seek 95]], [[c1:pause]]. Do not write the links yourself.', input_schema: obj({ ids: { type: 'array', items: { type: 'string' } }, t: { type: 'number' }, end: { type: 'number' } }, ['ids']) },
   my_standing: { description: 'How the learner is doing, from the course\'s own record and its own ranking of weakness (the same one its Study, Weak spots and Progress pages use): their weakest and strongest topics with % right and answers, the lesson that teaches each weak topic, lessons read, videos watched, flashcards due, best check per module, best mock exam, and recent quiz reviews. Use it for "what should I work on", "how am I doing", "what am I good at".', input_schema: obj() },
@@ -51,16 +51,27 @@ export const DEFS = {
   show_passage: { description: 'Show a passage of a lesson reading in the chat, as the lesson prints it, with Open in the lesson. ref is a lesson id (m2-l3); heading (optional) picks the part.', input_schema: obj({ ref: { type: 'string' }, heading: { type: 'string' } }, ['ref']) },
   draw_figure: { description: 'ONLY when nothing built fits (a niche question): draw a simple new illustration from a declarative spec, never code. spec = { view?:{x,y,w,h}, items:[{t:"point|line|arc|polygon|dim|angle|label|symbol|grid|axes", part?:"name", ...}], steps?:[{show?:[part], hl?:[part], say?}] }. y points up, angles in degrees counter-clockwise from +x. Items: point{x,y,label}, line{x1,y1,x2,y2,dash}, arc{cx,cy,r,from,to}, polygon{pts:[[x,y]],fill}, dim{x1,y1,x2,y2,text,off}, angle{x,y,r,from,to,text}, label{x,y,text,anchor}, symbol{kind:instrument|rod|north|monument|benchmark|tripod|target|pin,x,y,size}, grid{x,y,w,h,step}, axes{x,y,w,h,xlabel,ylabel}. At most 80 items, 16 steps, 9 KB. Parts named in a step’s show start hidden; cue them [[c1:show part]], [[c1:hl part]] or [[c1:step 2]]. Returns the card id or what to fix.', input_schema: obj({ title: { type: 'string' }, spec: { type: 'object' } }, ['spec']) },
   draw_derivation: { description: 'ONLY when no built equation card explains it: an equation derivation as ordered steps, shown with the course’s math formatting. steps = [{ math: "T = R tan(I/2)", say?: "why this line" }] (at most 12). Cue [[c1:step 2]] reveals through line 2, [[c1:hl 2]] stresses a line.', input_schema: obj({ title: { type: 'string' }, steps: { type: 'array', items: { type: 'object' } } }, ['steps']) },
-  worked_example: { description: 'A worked example with CORRECT numbers, from the course’s own problem generators (elevations and differential leveling, cut and fill, RTK GPS and GNSS, EDM, curves, traverses, error propagation…). Give a topic in course words; the engine draws fresh numbers and returns the question, every step’s computed result and the answer, and shows it in the chat with the generator’s own diagram. NEVER do the arithmetic of a shown answer yourself: quote these numbers. Then also show the matching figure (find_visuals + show_figure) when the example has no diagram of its own. Not available on a check or a mock exam.', input_schema: obj({ topic: { type: 'string' }, key: { type: 'string', description: 'a generator key from an earlier result, to draw again' } }) },
-  glossary: { description: 'Explain a term, alias, acronym or symbol from the course glossary (spelling may be rough): the plain definition, and when the data has them an example sentence, usage, what it is confused with and related terms; for an acronym its entry; the lessons that teach it (with the lesson own sentence and how to open it); and the figure or equation that shows it (show_figure / show_equation ids, with cue_part). Use it FIRST for "what is X", "what does X mean", "explain X". For a legal or boundary term then give a sentence from a deed or report; for a computational one call worked_example. Fast, no network.', input_schema: obj({ term: { type: 'string' } }, ['term']) },
-  law_basis: { description: 'For land-law and boundary questions: the lessons (and Texas-specific items) to rest a short realistic scenario on. Write the scenario yourself from what these say, cite each lesson by title, and say plainly what is US-general and what is Texas-specific.', input_schema: obj({ topic: { type: 'string' } }, ['topic']) },
+  worked_example: { description: "A worked example with CORRECT numbers, from the course's own problem generators. Give a topic in course words; the engine draws fresh numbers and returns the question, every step's computed result and the answer, and shows it in the chat with the generator's own diagram. NEVER do the arithmetic of a shown answer yourself: quote these numbers. Then also show the matching figure (find_visuals + show_figure) when the example has no diagram of its own. Not available on a check or an exam.", input_schema: obj({ topic: { type: 'string' }, key: { type: 'string', description: 'a generator key from an earlier result, to draw again' } }) },
+  glossary: { description: "Explain a term, alias, acronym or symbol from the course glossary (spelling may be rough): the plain definition, and when the data has them an example sentence, usage, what it is confused with and related terms; for an acronym its entry; the lessons that teach it (with the lesson own sentence and how to open it); and the figure or equation that shows it (show_figure / show_equation ids, with cue_part). Use it FIRST for \"what is X\", \"what does X mean\", \"explain X\". Fast, no network.", input_schema: obj({ term: { type: 'string' } }, ['term']) },
+  law_basis: { description: "For scenario-style questions: the lessons (and jurisdiction-specific items) to rest a short realistic scenario on. Write the scenario yourself from what these say, cite each lesson by title, and say plainly which rule is general and which is specific to one jurisdiction.", input_schema: obj({ topic: { type: 'string' } }, ['topic']) },
   media_control: { description: 'Control the app\'s player: pause, resume, next, previous, stop, louder, quieter, popout (open the video in their own browser at the same second).', input_schema: obj({ action: { type: 'string', enum: ['pause', 'resume', 'next', 'previous', 'stop', 'louder', 'quieter', 'popout'] } }, ['action']) },
 };
 
+/* Which of the teaching tools a course's teach block has the material for. */
+const NEEDS = {
+  find_visuals: 'figures', show_figure: 'figures', show_demo: 'figures', show_equation: 'figures', show_passage: 'figures', draw_figure: 'figures', draw_derivation: 'figures',
+  worked_example: 'generators', glossary: 'glossary', law_basis: 'lawBasis', handbook: 'reference', standard: 'reference',
+};
+/* opts: { allowCode, teach }  teach is the pack's teaching (teach/pack.js of(pack)) or null: a
+   pack without a teach block gets the generic assistant, and a pack with one gets exactly the
+   tools its block supplies, described in the course's own words (teach.tools). */
 export function definitions(opts) {
   const o = opts || {};
-  const TEACH = ['find_visuals','show_figure','show_demo','show_equation','show_passage','draw_figure','draw_derivation','worked_example','law_basis','glossary'];
-  return Object.entries(DEFS).filter(([name]) => (name !== 'review_code' || o.allowCode) && (!TEACH.includes(name) || o.teach)).map(([name, d]) => Object.assign({ name }, d));
+  const T = o.teach && typeof o.teach === 'object' ? o.teach : null;
+  const words = (T && T.section('tools')) || {};
+  return Object.entries(DEFS)
+    .filter(([name]) => (name !== 'review_code' || o.allowCode) && (!NEEDS[name] || (T && T.has(NEEDS[name]))))
+    .map(([name, d]) => Object.assign({ name }, d, words[name] ? { description: String(words[name]) } : {}));
 }
 
 
@@ -323,16 +334,17 @@ export function newCard(S, meta) {
 
 function teach(name, inp, S) {
   const pack = context.currentPack();
-  if (!pack || pack.id !== 'fs' || !teachCourse.available()) return err('Figures, equations and examples are only in the FS course.');
+  const T = teachPack.of(pack);
+  if (!T || !NEEDS[name] || !T.has(NEEDS[name])) return err('This course does not teach with ' + name + '.');
   const push = (kind, payload, meta) => {
     const card = newCard(S, Object.assign({ kind }, meta));
     S.actions.push(Object.assign({ type: 'teach', card, kind, course: pack.id }, payload));
     return card;
   };
   switch (name) {
-    case 'find_visuals': return ok(Object.assign(visuals.find(inp.query), { next: 'Show with show_figure / show_demo / show_equation / show_passage; if nothing fits and the question is niche, draw_figure.' }));
+    case 'find_visuals': return ok(Object.assign(visuals.find(pack, inp.query), { next: 'Show with show_figure / show_demo / show_equation / show_passage; if nothing fits and the question is niche, draw_figure.' }));
     case 'show_figure': case 'show_demo': {
-      const r = visuals.figure(inp.id, inp.params && typeof inp.params === 'object' ? inp.params : null, name === 'show_demo');
+      const r = visuals.figure(pack, inp.id, inp.params && typeof inp.params === 'object' ? inp.params : null, name === 'show_demo');
       if (r.error) return err(r.error);
       const d = r.d;
       const card = push(r.card.kind, r.card, { parts: d.parts.map((p) => p.id), steps: d.steps.length });
@@ -340,13 +352,13 @@ function teach(name, inp, S) {
         cues: 'Cue it in your reply: [[' + card + ':hl PART]] / [[' + card + ':show PART]] / [[' + card + ':step N]]. Place each cue right where you say that thing.' });
     }
     case 'show_equation': {
-      const r = visuals.equation(inp.id);
+      const r = visuals.equation(pack, inp.id);
       if (r.error) return err(r.error);
       const card = push('equation', r.card, { symbols: r.card.symbols });
       return ok(Object.assign({ card, shown: true, cues: 'Emphasise a symbol as you explain it: [[' + card + ':sym T]]. [[' + card + ':open derive]] opens why it has this form.' }, r.out));
     }
     case 'show_passage': {
-      const r = visuals.passage(inp.ref, inp.heading);
+      const r = visuals.passage(pack, inp.ref, inp.heading);
       if (r.error) return err(r.error);
       const card = push('passage', r.card, {});
       return ok(Object.assign({ card, shown: true }, r.out));
@@ -365,18 +377,18 @@ function teach(name, inp, S) {
     }
     case 'worked_example': {
       if (S.graded) return err('This is a check or exam page: do not work examples here.');
-      const r = examples.generate({ topic: inp.topic, key: inp.key });
+      const r = examples.generate(pack, { topic: inp.topic, key: inp.key });
       if (r.error) return err(r.error);
       const card = push('example', r.card, { steps: r.card.steps.length });
-      const near = inp.topic ? visuals.find(inp.topic).figures.slice(0, 2) : [];
+      const near = inp.topic ? visuals.find(pack, inp.topic).figures.slice(0, 2) : [];
       return ok(Object.assign({ card, shown: true, cues: 'Walk it with [[' + card + ':step N]] as you say each step.', figures_that_fit: near.length ? near : undefined }, r.out));
     }
     case 'glossary': {
-      const r = glossary.lookup(String(inp.term || inp.query || ''));
+      const r = glossary.lookup(pack, String(inp.term || inp.query || ''));
       return ok(r);
     }
     case 'law_basis': {
-      const r = examples.lawBasis(inp.topic);
+      const r = examples.lawBasis(pack, inp.topic);
       if (r.error) return err(r.error);
       return ok(r.out);
     }

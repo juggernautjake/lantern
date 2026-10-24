@@ -33,6 +33,33 @@ If you run a hub, you can make it the default in **your** release, so the people
 
 A secret or `service_role` key stops the release, and the app refuses one in `config/hub.json` anyway. The public key is safe to ship: your hub's rules decide what each person may see. A learner can still connect to a different hub in Settings → Account & hub; their choice wins over the default.
 
+## Big media on Cloudflare R2
+
+A course with hours of narration is too big for the free hub (1 GB in all). Its audio lives on Cloudflare R2 instead, and the course pack holds only the pages and a list of the audio files. `courses/fs` does this: the pack is about 185 MB, the 766 MB of `.mp4` audio is on R2.
+
+**One-time setup** (Cloudflare dashboard)
+1. Create an R2 bucket named `lantern-media`.
+2. Switch on public read through r2.dev (the bucket's *Settings*, *Public access*), and copy the `https://pub-….r2.dev` address.
+3. Create an API token with *Object Read & Write* on that bucket.
+4. Put these in `.env` at the repo root (never committed, never printed by the scripts):
+   - `R2_ACCOUNT_ID`
+   - `R2_ACCESS_KEY_ID`
+   - `R2_SECRET_ACCESS_KEY`
+   - `R2_BUCKET` (`lantern-media`)
+   - `R2_PUBLIC_URL` (the `https://pub-….r2.dev` address)
+
+**Each release of a course with media**
+```
+node scripts/build-pack.mjs fs             the pack lists every media file with its key, size and sha256
+node scripts/upload-media.mjs fs           HEADs each key, uploads only the missing ones; prints counts and bytes
+node scripts/publish-course.mjs fs         refuses until every media file answers at the public URL
+```
+Keys are `<keyPrefix>/<sha256>.mp4`, so a file is uploaded once, an unchanged file is never uploaded again, and older versions of the course keep working because their keys still exist. Never delete keys from the bucket while a published version still uses them. `publish-course` has `--skip-media-check` for the rare case you must publish before uploading.
+
+**What an installed copy does.** After the pack installs (from the hub, a file or the bundled folder) the app downloads every media file into the pack's own folder in the background, checks each sha256, and carries on after a restart or a lost connection. Files the previous version already holds are linked, not downloaded again, so an update fetches only new audio. Until a file is saved, `/packs/<id>/<path>` redirects to the public URL so the video plays at once; once saved, it plays from the computer, offline. The course list shows `media: { have, total, bytes }` and the bus carries a `media` event; the home page shows it as one quiet line on the course card.
+
+A Lantern older than 0.2.1 does not know about `media`, so the course's `minPlatform` is 0.2.1.
+
 ## What the export takes
 
 Only the paths in `ALLOW` in `scripts/export.mjs`:

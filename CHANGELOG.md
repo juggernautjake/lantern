@@ -1,5 +1,14 @@
 # What's new
 
+## 0.2.1
+
+- **One platform, many courses.** Every course now teaches through what its own pack declares (a `teach` block in its manifest): its figures, equations, worked-example generators, glossary, reference, subject and wording. Nothing about one subject is built into Lantern. A course without a `teach` block gets the general assistant; with one, it gets exactly the tools it supplies. FS Exam Prep's tutoring now works in an installed copy, not only from a source checkout.
+- **The assistant stays on the course you are in.** Its scope (subject, words, and the one-word gate) comes from the course; a course that declares teaching but no scope is scoped to its title and description.
+- **The wake word is steadier.** The status no longer flickers between "Ready" and "Ready, say Lantern".
+- **Large courses publish reliably.** Parts are retried, and the publish script waits as long as the upload takes.
+- **Course media can live outside the pack (not switched on yet).** A course can keep its big files on a public URL (Cloudflare R2) and Lantern downloads them in the background. No course uses it yet.
+- **FS Exam Prep 1.3.1:** the Study page with one ranking, Weak spots, interface fixes and teaching that works in installed copies. See the course's own notes.
+
 ## 0.2.0
 
 - **The assistant teaches with the course.** Ask about any term, symbol, equation, figure, code or standard: it answers first, then points you to the video (starting at the right chapter) or the lesson that covers it. When a picture helps, it shows the course's own figure, demonstration or equation card and highlights each part as it explains, or draws a simple sketch for a question the course has no figure for. Worked examples use numbers the course computes, never guesses.
